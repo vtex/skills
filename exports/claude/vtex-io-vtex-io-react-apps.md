@@ -24,7 +24,7 @@ Do not use this skill for:
 - Each exported component MUST have a root-level file in `/react` that re-exports it. The builder resolves `"component": "ProductReviews"` to `react/ProductReviews.tsx`.
 - For **storefront** components, use `vtex.css-handles` for styling (not inline styles, not global CSS).
 - For **admin** components, use `vtex.styleguide` — the official VTEX Admin component library. No third-party UI libraries.
-- Use `contentSchemas.json` in `/store` to make component props editable in Site Editor (JSON Schema format).
+- Use `contentSchemas.json` in `/store` to make component props editable in Site Editor (JSON Schema format). Merchant edits are stored by `vtex.pages-graphql` under a key that includes the **declaring app's MAJOR version** (`vendor.app@MAJOR.x:template`). A major version bump on the declaring app makes those edits invisible to the resolver until they are migrated to the new major with the `updateThemeIds` mutation in `vtex.pages-graphql@2.x` — see `vtex-io-storefront-theme-versioning`.
 - Use `react-intl` and the `messages` builder for i18n — never hardcode user-facing strings.
 - Fetch data via GraphQL queries (`useQuery` from `react-apollo`), never via direct API calls from the browser.
 
@@ -407,6 +407,7 @@ Using the component in a Store Framework theme:
 - **Directly calling APIs from React components**: Using `fetch()` or `axios` exposes authentication tokens to the client and bypasses CORS restrictions. Use GraphQL queries that resolve server-side via `useQuery` from `react-apollo`.
 - **Hardcoded strings without i18n**: Components with hardcoded strings only work in one language. Use the `messages` builder and `react-intl` for internationalization.
 - **Missing root-level export file**: If `interfaces.json` references `"component": "ProductReviews"` but `react/ProductReviews.tsx` doesn't exist, the block silently fails to render.
+- **Major version bump on a content-holding component app**: A `vtex release major` on an app that ships `store/contentSchemas.json` makes every Site Editor edit ever saved against blocks declared by that app invisible to the resolver until it is migrated to the new major with the `updateThemeIds` mutation in `vtex.pages-graphql@2.x`. Use a `patch` or `minor` whenever possible, and follow `vtex-io-storefront-theme-versioning` when a major is unavoidable.
 
 ## Review checklist
 
@@ -417,6 +418,12 @@ Using the component in a Store Framework theme:
 - [ ] Is data fetched via GraphQL (`useQuery`), not direct API calls?
 - [ ] Are user-facing strings using `react-intl` and the `messages` builder?
 - [ ] Is `contentSchemas.json` defined for Site Editor-editable props?
+- [ ] If the app ships `store/contentSchemas.json`, has the merchant-facing impact of any planned major version bump been reviewed?
+
+## Related skills
+
+- [`vtex-io-storefront-theme-versioning`](../vtex-io-storefront-theme-versioning/skill.md) — Use when the app ships `store/contentSchemas.json` and a version change must preserve or migrate Site Editor content.
+- [`vtex-io-storefront-theme-app`](../vtex-io-storefront-theme-app/skill.md) — Use when the question is how a consumer theme composes these blocks into pages.
 
 ## Reference
 
