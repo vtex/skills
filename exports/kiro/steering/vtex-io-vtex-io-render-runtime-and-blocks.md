@@ -27,6 +27,8 @@ Do not use this skill for:
 - The `component` field should map to the React entry name under `react/`, such as `ProductReviews`, or a nested path such as `product/ProductReviews` when the app structure is hierarchical.
 - Use `composition` intentionally when the block needs an explicit child model. `children` means the component renders nested blocks through `props.children`, while `blocks` means the block exposes named block slots controlled by Store Framework.
 - `composition` is optional. For many simple blocks, declaring `component` and, when needed, `allowed` is enough.
+- Block IDs are scoped by the **declaring app's MAJOR version**. `vtex.pages-graphql` resolves a block reference such as `acme-related-products` against `acme.product-widgets@MAJOR.x:acme-related-products` for the major actually installed in the workspace. A block declared in `0.x` is not the same block as one declared in `5.x`, even if the ID is identical.
+- A consumer theme that references a block ID through `store/blocks.json` only sees the block if the declaring app is installed at a major matching the dependency range. Mismatches surface as `Missing block vendor.app@MAJOR.x:block-id` errors at the resolver and break the page.
 - Use this skill for the render/runtime contract, and use storefront/admin skills for the component implementation itself.
 
 ## Hard constraints
@@ -90,6 +92,45 @@ If an interface points to a component name with no corresponding React entry fil
   }
 }
 ```
+
+### Constraint: Block IDs must resolve under the installed major of the declaring app
+
+Block IDs referenced from a theme app's `store/blocks.json` MUST resolve to an `interfaces.json` entry in an installed app whose MAJOR version matches the consumer's dependency range. The render-time resolver is keyed by `vendor.app@MAJOR.x:block-id`, not by the bare block ID.
+
+**Why this matters**
+
+`vtex.pages-graphql` uses the declaring app's major version as part of the block lookup. A block that exists in `acme.product-widgets@0.x` is not visible to a consumer that resolves `acme.product-widgets@5.x`, even if the block ID is identical. Mismatches return `Missing block` errors at the GraphQL layer and the page falls back to default content or fails outright.
+
+**Detection**
+
+If a consumer theme references a block ID and the declaring app's installed major does not match the consumer's dependency range, STOP and align the dependency range or move the block declaration to the correct major.
+
+**Correct**
+
+```json
+// consumer theme manifest.json
+{ "dependencies": { "acme.product-widgets": "0.x" } }
+```
+
+```json
+// acme.product-widgets@0.x ships store/interfaces.json with:
+{ "acme-related-products": { "component": "RelatedProducts" } }
+```
+
+```json
+// consumer theme store/blocks.json
+{ "store.product": { "children": ["acme-related-products"] } }
+```
+
+**Wrong**
+
+```json
+// consumer theme depends on acme.product-widgets@0.x
+// but the block "acme-related-products" was added in @5.x and never backported
+{ "store.product": { "children": ["acme-related-products"] } }
+```
+
+The resolver returns `Missing block acme.product-widgets@0.x:acme-related-products`.
 
 ### Constraint: Block composition must be intentional
 
@@ -170,6 +211,8 @@ This wiring makes the block name visible in the theme, maps it to a real React e
 - Forgetting to register a storefront component as a block.
 - Mapping block names to missing React entry files.
 - Using the wrong composition model.
+- Adding a new block to a `5.x` line and assuming consumers depending on `0.x` will see it. Block visibility is scoped by the declaring app's installed major.
+- Renaming a block ID without coordinating with consumer themes that already reference it; the rename is effectively a breaking change for stored content.
 
 ## Review checklist
 
@@ -177,7 +220,14 @@ This wiring makes the block name visible in the theme, maps it to a real React e
 - [ ] Does the component mapping resolve correctly?
 - [ ] Are composition and allowed children intentional?
 - [ ] Is runtime registration clearly separated from component internals?
+- [ ] Is the declaring app installed at a major that matches every consumer's dependency range?
+
+## Related skills
+
+- [`vtex-io-storefront-theme-app`](vtex-io-vtex-io-storefront-theme-app.md) — Use when the question is how a consumer theme composes these blocks into pages and routes.
+- [`vtex-io-storefront-theme-versioning`](vtex-io-vtex-io-storefront-theme-versioning.md) — Use when the question is how a major version change in a block-declaring app affects merchants who already reference those blocks in stored content.
 
 ## Reference
 
 - [Store Framework](https://developers.vtex.com/docs/guides/vtex-io-documentation-store-framework) - Block and theme context
+- [Interfaces](https://developers.vtex.com/docs/guides/vtex-io-documentation-interface) — How `interfaces.json` maps block IDs to React components and how block IDs are namespaced by app major.

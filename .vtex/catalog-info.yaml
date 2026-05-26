@@ -1,0 +1,18 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ai-skills
+  description: AI agent skills for VTEX platform development
+  annotations:
+    github.com/project-slug: vtex/ai-skills
+    backstage.io/techdocs-ref: dir:../
+    vtex.com/application-id: MNLD6E1P
+    janus-idp.io/tekton: ai-skills
+    backstage.io/kubernetes-label-selector: dkcicd.vtex.io/repository-owner=vtex,dkcicd.vtex.io/repository-name=ai-skills
+    vtex.com/unsafe-short-name: ai-skills
+    vtex.com/sdd-check-skip: 'true'
+    vtex.com/sdd-check-skip-reason: Skip this project because it is a public repo
+spec:
+  type: docs-library
+  lifecycle: experimental
+  owner: te-0029

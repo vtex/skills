@@ -5,12 +5,14 @@ This skill provides guidance for AI agents working with VTEX Payment Connector D
 ## When this skill applies
 
 Use this skill when:
+
 - Building a payment connector that accepts credit cards, debit cards, or co-branded cards
 - The connector needs to process card data or communicate with an acquirer
 - Determining whether Secure Proxy is required for the hosting environment
 - Auditing a connector for PCI DSS compliance (data storage, logging, transmission)
 
 Do not use this skill for:
+
 - PPP endpoint contracts and response shapes — use [`payment-provider-protocol`](../payment-provider-protocol/skill.md)
 - Idempotency and duplicate prevention — use [`payment-idempotency`](../payment-idempotency/skill.md)
 - Async payment flows (Boleto, Pix) and callbacks — use [`payment-async-flow`](../payment-async-flow/skill.md)
@@ -38,8 +40,12 @@ Non-PCI environments are not authorized to handle raw card data. Calling the acq
 If the connector calls an acquirer endpoint directly (without going through `secureProxyUrl`) when `secureProxyUrl` is present in the request, STOP immediately. All acquirer communication must go through the Secure Proxy.
 
 **Correct**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { paymentId, secureProxyUrl, card } = req.body;
 
   if (secureProxyUrl) {
@@ -55,9 +61,9 @@ async function createPaymentHandler(req: Request, res: Response): Promise<void> 
       body: JSON.stringify({
         orderId: paymentId,
         payment: {
-          cardNumber: card.numberToken,     // Token, not real number
-          holder: card.holderToken,          // Token, not real name
-          securityCode: card.cscToken,       // Token, not real CVV
+          cardNumber: card.numberToken, // Token, not real number
+          holder: card.holderToken, // Token, not real name
+          securityCode: card.cscToken, // Token, not real CVV
           expirationMonth: card.expiration.month,
           expirationYear: card.expiration.year,
         },
@@ -71,8 +77,12 @@ async function createPaymentHandler(req: Request, res: Response): Promise<void> 
 ```
 
 **Wrong**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { paymentId, secureProxyUrl, card } = req.body;
 
   // WRONG: Calling acquirer directly, bypassing Secure Proxy
@@ -81,7 +91,7 @@ async function createPaymentHandler(req: Request, res: Response): Promise<void> 
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "MerchantId": process.env.ACQUIRER_MERCHANT_ID!,
+      MerchantId: process.env.ACQUIRER_MERCHANT_ID!,
     },
     body: JSON.stringify({
       orderId: paymentId,
@@ -124,7 +134,7 @@ export class PspSecureClient extends SecureExternalClient {
   public async authorize(data: object, secureProxyUrl: string) {
     return this.http.post("/payments", data, {
       secureProxy: secureProxyUrl,
-    } as any)
+    } as any);
   }
 }
 
@@ -133,9 +143,13 @@ import { ExternalClient } from "@vtex/api";
 
 export class PspClient extends ExternalClient {
   public async capture(tid: string, amount: number) {
-    return this.http.post(`/payments/${tid}/capture`, { amount }, {
-      headers: { "X-API-Key": "..." },
-    })
+    return this.http.post(
+      `/payments/${tid}/capture`,
+      { amount },
+      {
+        headers: { "X-API-Key": "..." },
+      },
+    );
   }
 }
 ```
@@ -150,6 +164,108 @@ async settle(request: SettlementRequest) {
 }
 ```
 
+### Constraint: Headless storefront BFFs MUST NOT proxy card data to vtexpayments.com.br
+
+In a headless storefront, the Send payments information call (`POST https://{account}.vtexpayments.com.br/api/pub/transactions/{tid}/payments`) MUST originate from the shopper's browser or native app. The merchant's BFF (Node, Next.js route handler, edge function, lambda, reverse proxy, or any server-side component) MUST NOT receive card fields from the browser and MUST NOT forward them to the Payment Gateway, even with redaction, even with `appKey`/`appToken` on the server side, and even when only "tokenized" fields appear to be forwarded.
+
+This constraint extends the same PCI principle that drives Secure Proxy: a non-PCI environment is not allowed to handle card data. For payment connectors that environment is the IO app; for headless storefronts it is the merchant BFF. The destination differs — Secure Proxy protects the connector → acquirer path, the browser → `vtexpayments.com.br` pattern protects the storefront → Payment Gateway path — but the rule is identical: keep raw card data inside the certified perimeter.
+
+**Why this matters**
+
+The merchant operating the headless storefront is rarely PCI DSS Level 1 certified. Routing card numbers, holder names, or CVV through the merchant's BFF places the BFF and every system it touches (application logs, APM, reverse proxies, load balancers, error trackers) inside PCI scope. Operating a non-PCI environment that handles card data violates PCI DSS Requirements 3 and 4 and can result in fines from $5,000 to over $100,000 per month from card networks, mandatory forensic investigation costs, loss of card processing ability, class-action exposure, and criminal liability in some jurisdictions.
+
+The VTEX Payment Gateway (`vtexpayments.com.br`) is PCI DSS Level 1 certified. The browser → Payment Gateway path keeps card data inside the certified perimeter; the merchant BFF stays out of the card-data flow entirely. The Send payments information endpoint is authenticated by the shopper's session cookies set during the previous Place Order step — no merchant credentials are required for this hop.
+
+**Detection**
+
+If you find any of the following in BFF / server-side code (`server/`, `bff/`, `api/`, route handlers, middleware, edge functions, lambdas), STOP immediately:
+
+- A request from the BFF to `https://*.vtexpayments.com.br/api/pub/transactions/.../payments`,
+- A handler that accepts `cardNumber`, `holderName`, `validationCode`, `csc`, `dueDate`, or full payment `fields` from the browser,
+- A "Payments client" / `ExternalClient` / `axios` instance on the server pointing at `vtexpayments.com.br` for the Send payments information endpoint.
+
+The BFF should expose `/api/bff/order/place` (returns `transactionId`, `orderGroup`, `merchantName`) and `/api/bff/order/process` (calls `/api/checkout/pub/gatewayCallback/{orderGroup}` — no card data) but never an endpoint that forwards card fields to `vtexpayments.com.br`.
+
+**Correct**
+
+```typescript
+async function sendPaymentDataDirect(args: {
+  account: string;
+  transactionId: string;
+  orderGroup: string;
+  merchantName: string;
+  paymentInformation: PaymentField[];
+}): Promise<void> {
+  const {
+    account,
+    transactionId,
+    orderGroup,
+    merchantName,
+    paymentInformation,
+  } = args;
+
+  const response = await fetch(
+    `https://${account}.vtexpayments.com.br/api/pub/transactions/${transactionId}/payments?orderId=${orderGroup}`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(
+        paymentInformation.map((p) => ({
+          ...p,
+          transaction: { id: transactionId, merchantName },
+        })),
+      ),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Payment submission failed: ${response.status}`);
+  }
+}
+```
+
+**Wrong**
+
+```typescript
+const VTEX_APP_KEY = process.env.VTEX_APP_KEY!;
+const VTEX_APP_TOKEN = process.env.VTEX_APP_TOKEN!;
+
+paymentRoutes.post("/", async (req: Request, res: Response) => {
+  const { transactionId, orderGroup, paymentInformation } = req.body as {
+    transactionId: string;
+    orderGroup: string;
+    paymentInformation: Array<{
+      paymentSystem: number;
+      installments: number;
+      value: number;
+      fields: {
+        cardNumber: string;
+        holderName: string;
+        validationCode: string;
+        dueDate: string;
+      };
+    }>;
+  };
+
+  const url = `https://${process.env.VTEX_ACCOUNT}.vtexpayments.com.br/api/pub/transactions/${transactionId}/payments?orderId=${orderGroup}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-VTEX-API-AppKey": VTEX_APP_KEY,
+      "X-VTEX-API-AppToken": VTEX_APP_TOKEN,
+    },
+    body: JSON.stringify(paymentInformation),
+  });
+
+  res.json({ status: response.status });
+});
+```
+
 ### Constraint: MUST NOT store raw card data
 
 The connector MUST NOT store the full card number (PAN), CVV/CSC, cardholder name, or any card token values in any persistent storage — database, file system, cache, session store, or any other durable medium. Card data must only exist in memory during the request lifecycle.
@@ -161,16 +277,20 @@ Storing raw card data violates PCI DSS Requirement 3. A data breach exposes cust
 If the code writes card number, CVV, cardholder name, or token values to a database, file, cache (Redis, VBase), or any persistent store, STOP immediately. Only `card.bin` (first 6 digits) and `card.numberLength` may be stored.
 
 **Correct**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { paymentId, card, secureProxyUrl } = req.body;
 
   // Only store non-sensitive card metadata
   await paymentStore.save(paymentId, {
     paymentId,
-    cardBin: card.bin,            // First 6 digits — safe to store
-    cardNumberLength: card.numberLength,  // Length — safe to store
-    cardExpMonth: card.expiration.month,  // Expiration — safe to store
+    cardBin: card.bin, // First 6 digits — safe to store
+    cardNumberLength: card.numberLength, // Length — safe to store
+    cardExpMonth: card.expiration.month, // Expiration — safe to store
     cardExpYear: card.expiration.year,
     // DO NOT store: card.numberToken, card.holderToken, card.cscToken
   });
@@ -184,15 +304,19 @@ async function createPaymentHandler(req: Request, res: Response): Promise<void> 
 ```
 
 **Wrong**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { paymentId, card } = req.body;
 
   // CRITICAL PCI VIOLATION: Storing full card data in database
   await database.query(
     `INSERT INTO payments (payment_id, card_number, cvv, holder_name)
      VALUES ($1, $2, $3, $4)`,
-    [paymentId, card.number, card.csc, card.holder]
+    [paymentId, card.number, card.csc, card.holder],
   );
   // This single line can result in:
   // - $100K/month fines from card networks
@@ -213,8 +337,12 @@ Logs are typically stored in plaintext, retained for extended periods, and acces
 If the code contains `console.log`, `console.error`, `logger.info`, `logger.debug`, or any logging call that includes `card.number`, `card.csc`, `card.holder`, `card.numberToken`, `card.holderToken`, `card.cscToken`, or the full request body without redaction, STOP immediately. Redact or omit all sensitive fields before logging.
 
 **Correct**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { paymentId, card, paymentMethod, value } = req.body;
 
   // Safe logging — only non-sensitive fields
@@ -222,15 +350,17 @@ async function createPaymentHandler(req: Request, res: Response): Promise<void> 
     paymentId,
     paymentMethod,
     value,
-    cardBin: card?.bin,              // First 6 digits only — safe
-    cardNumberLength: card?.numberLength,  // Safe
+    cardBin: card?.bin, // First 6 digits only — safe
+    cardNumberLength: card?.numberLength, // Safe
   });
 
   // NEVER log the full request body for payment requests
   // It contains card tokens or raw card data
 }
 
-function redactSensitiveFields(body: Record<string, unknown>): Record<string, unknown> {
+function redactSensitiveFields(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
   const redacted = { ...body };
   if (redacted.card && typeof redacted.card === "object") {
     const card = redacted.card as Record<string, unknown>;
@@ -246,8 +376,12 @@ function redactSensitiveFields(body: Record<string, unknown>): Record<string, un
 ```
 
 **Wrong**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   // CRITICAL PCI VIOLATION: Logging the entire request body
   // This includes card number, CVV, holder name, and/or token values
   console.log("Payment request received:", JSON.stringify(req.body));
@@ -292,18 +426,18 @@ interface CreatePaymentRequest {
   currency: string;
   paymentMethod: string;
   card?: {
-    holder?: string;        // Raw (PCI) or absent (Secure Proxy)
-    holderToken?: string;   // Token (Secure Proxy only)
-    number?: string;        // Raw (PCI) or absent (Secure Proxy)
-    numberToken?: string;   // Token (Secure Proxy only)
-    bin: string;            // Always present — first 6 digits
-    numberLength: number;   // Always present
-    csc?: string;           // Raw (PCI) or absent (Secure Proxy)
-    cscToken?: string;      // Token (Secure Proxy only)
+    holder?: string; // Raw (PCI) or absent (Secure Proxy)
+    holderToken?: string; // Token (Secure Proxy only)
+    number?: string; // Raw (PCI) or absent (Secure Proxy)
+    numberToken?: string; // Token (Secure Proxy only)
+    bin: string; // Always present — first 6 digits
+    numberLength: number; // Always present
+    csc?: string; // Raw (PCI) or absent (Secure Proxy)
+    cscToken?: string; // Token (Secure Proxy only)
     expiration: { month: string; year: string };
   };
-  secureProxyUrl?: string;          // Present when Secure Proxy is active
-  secureProxyTokensURL?: string;    // For custom token operations
+  secureProxyUrl?: string; // Present when Secure Proxy is active
+  secureProxyTokensURL?: string; // For custom token operations
   callbackUrl: string;
   miniCart: Record<string, unknown>;
 }
@@ -338,12 +472,12 @@ Call acquirer through Secure Proxy with proper headers:
 ```typescript
 async function callAcquirerViaProxy(
   secureProxyUrl: string,
-  acquirerRequest: object
+  acquirerRequest: object,
 ): Promise<AcquirerResponse> {
   const response = await fetch(secureProxyUrl, {
     method: "POST",
     headers: {
-      "Accept": "application/json",
+      Accept: "application/json",
       "Content-Type": "application/json",
       // X-PROVIDER-Forward-To tells the proxy where to send the request
       "X-PROVIDER-Forward-To": process.env.ACQUIRER_API_URL!,
@@ -356,21 +490,25 @@ async function callAcquirerViaProxy(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Secure Proxy call failed: ${response.status} ${errorText}`);
+    throw new Error(
+      `Secure Proxy call failed: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json() as Promise<AcquirerResponse>;
 }
 
 // For PCI-certified environments, call acquirer directly
-async function callAcquirerDirect(acquirerRequest: object): Promise<AcquirerResponse> {
+async function callAcquirerDirect(
+  acquirerRequest: object,
+): Promise<AcquirerResponse> {
   const response = await fetch(process.env.ACQUIRER_API_URL!, {
     method: "POST",
     headers: {
-      "Accept": "application/json",
+      Accept: "application/json",
       "Content-Type": "application/json",
-      "MerchantId": process.env.ACQUIRER_MERCHANT_ID!,
-      "MerchantKey": process.env.ACQUIRER_MERCHANT_KEY!,
+      MerchantId: process.env.ACQUIRER_MERCHANT_ID!,
+      MerchantKey: process.env.ACQUIRER_MERCHANT_KEY!,
     },
     body: JSON.stringify(acquirerRequest),
   });

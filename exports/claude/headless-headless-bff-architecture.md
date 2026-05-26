@@ -279,6 +279,14 @@ app.use(
 );
 app.use(
   session({
+    // Production BFFs are typically multi-replica. Configure a shared session
+    // store (e.g. connect-redis, connect-memcached, a Postgres-backed store)
+    // here — the default MemoryStore is per-pod and silently drops values such
+    // as orderFormId and vtexAuthToken when requests are routed to a different
+    // replica. For ephemeral cross-step values that the browser already sees
+    // (e.g. orderGroup between Step 1 and Step 3 of order placement), prefer
+    // passing them through the request body instead of writing them to the
+    // session — see headless-checkout-proxy.
     secret: process.env.SESSION_SECRET!,
     resave: false,
     saveUninitialized: false,

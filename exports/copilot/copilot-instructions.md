@@ -657,6 +657,14 @@ app.use(
 );
 app.use(
   session({
+    // Production BFFs are typically multi-replica. Configure a shared session
+    // store (e.g. connect-redis, connect-memcached, a Postgres-backed store)
+    // here — the default MemoryStore is per-pod and silently drops values such
+    // as orderFormId and vtexAuthToken when requests are routed to a different
+    // replica. For ephemeral cross-step values that the browser already sees
+    // (e.g. orderGroup between Step 1 and Step 3 of order placement), prefer
+    // passing them through the request body instead of writing them to the
+    // session — see headless-checkout-proxy.
     secret: process.env.SESSION_SECRET!,
     resave: false,
     saveUninitialized: false,
@@ -1517,48 +1525,57 @@ Use this skill when building cart and checkout functionality for any headless VT
 - Managing `orderFormId` and `CheckoutOrderFormOwnership` cookies server-side
 
 Do not use this skill for:
+
 - General BFF architecture and API routing (use [`headless-bff-architecture`](../headless-bff-architecture/skill.md))
 - Search API integration (use [`headless-intelligent-search`](../headless-intelligent-search/skill.md))
 - Caching strategy decisions (use [`headless-caching-strategy`](../headless-caching-strategy/skill.md))
 
 ## Decision rules
 
-- ALL Checkout API calls MUST be proxied through the BFF — no exceptions. The Checkout API handles sensitive personal data (profile, address, payment).
+- ALL Checkout API calls (`/api/checkout/...` on `vtexcommercestable.com.br`) MUST be proxied through the BFF. The Checkout API handles sensitive personal data (profile, address, payment-method selection).
+- **PCI carve-out:** the Send payments information call to the VTEX Payment Gateway (`POST https://{account}.vtexpayments.com.br/api/pub/transactions/{tid}/payments`) MUST go directly from the browser/app to `vtexpayments.com.br` whenever it carries card data. The merchant BFF MUST NOT be in the card-data path. See the dedicated hard constraint below and [`payment-pci-security`](../../../payment/skills/payment-pci-security/skill.md).
 - Store `orderFormId` in a server-side session, never in `localStorage` or `sessionStorage`.
 - Capture and forward `CheckoutOrderFormOwnership` and `checkout.vtex.com` cookies between the BFF and VTEX on every request.
 - Validate all inputs server-side before forwarding to VTEX — never pass raw `req.body` directly.
-- Execute the 3-step order placement flow (place order → send payment → process order) in a single synchronous BFF handler to stay within the **5-minute window**.
+- Execute the 3-step order placement flow (place order → send payment → process order) as a single synchronous user interaction within the **5-minute window**. Step 1 (place) and Step 3 (gateway callback) run in the BFF; Step 2 (send payment data to `vtexpayments.com.br`) runs in the browser per the PCI carve-out above.
 - Always store and reuse the existing `orderFormId` from the session — only create a new cart when no `orderFormId` exists.
+- Pass intermediate flow values such as `orderGroup` between Step 1 (`/place`) and Step 3 (`/process`) **through the request body**, not through `req.session`. Production BFFs are typically multi-replica; `express-session`'s default `MemoryStore` (and any per-pod cache) loses the value when the two requests land on different pods, returning a misleading "no pending order to process" 400. If a shared session store (Redis, Memcached, database) is already required for `orderFormId`/`vtexCookies`, see the Hard constraint below for why the cross-step handoff still belongs in the request body — it stays correct under partial outages, sticky-routing failures, and replay/refresh after a tab reload.
 
 OrderForm attachment endpoints:
 
-| Attachment | Endpoint | Purpose |
-|---|---|---|
-| items | `POST .../orderForm/{id}/items` | Add, remove, or update cart items |
-| clientProfileData | `POST .../orderForm/{id}/attachments/clientProfileData` | Customer profile info |
-| shippingData | `POST .../orderForm/{id}/attachments/shippingData` | Address and delivery option |
-| paymentData | `POST .../orderForm/{id}/attachments/paymentData` | Payment method selection |
-| marketingData | `POST .../orderForm/{id}/attachments/marketingData` | Coupons and UTM data |
+| Attachment        | Endpoint                                                | Purpose                           |
+| ----------------- | ------------------------------------------------------- | --------------------------------- |
+| items             | `POST .../orderForm/{id}/items`                         | Add, remove, or update cart items |
+| clientProfileData | `POST .../orderForm/{id}/attachments/clientProfileData` | Customer profile info             |
+| shippingData      | `POST .../orderForm/{id}/attachments/shippingData`      | Address and delivery option       |
+| paymentData       | `POST .../orderForm/{id}/attachments/paymentData`       | Payment method selection          |
+| marketingData     | `POST .../orderForm/{id}/attachments/marketingData`     | Coupons and UTM data              |
 
 ## Hard constraints
 
-### Constraint: ALL checkout operations MUST go through BFF
+### Constraint: ALL Checkout API operations MUST go through BFF
 
-Client-side code MUST NOT make direct HTTP requests to any VTEX Checkout API endpoint (`/api/checkout/`). All checkout operations — cart creation, item management, profile updates, shipping, payment, and order placement — must be proxied through the BFF layer.
+Client-side code MUST NOT make direct HTTP requests to any VTEX Checkout API endpoint on `vtexcommercestable.com.br/api/checkout/...`. All Checkout API operations — cart creation, item management, profile updates, shipping, payment-method selection (`paymentData` attachment), order placement (`/transaction`), and order processing (`/gatewayCallback`) — must be proxied through the BFF.
+
+This rule applies to the Checkout API only. The Send payments information call on `vtexpayments.com.br` is governed by the next constraint and goes the opposite way (browser-direct) for PCI reasons; do not generalize this rule to that endpoint.
 
 **Why this matters**
 
-Checkout endpoints handle sensitive personal data (email, address, phone, payment details). Direct frontend calls expose the request/response flow to browser DevTools, extensions, and XSS attacks. Additionally, the BFF layer is needed to manage `VtexIdclientAutCookie` and `CheckoutOrderFormOwnership` cookies server-side, validate inputs, and prevent cart manipulation (e.g., price tampering).
+Checkout endpoints handle sensitive personal data (email, address, phone, payment-method selection). Direct frontend calls expose the request/response flow to browser DevTools, extensions, and XSS attacks. Additionally, the BFF layer is needed to manage `VtexIdclientAutCookie` and `CheckoutOrderFormOwnership` cookies server-side, validate inputs, and prevent cart manipulation (e.g., price tampering).
 
 **Detection**
 
-If you see `fetch` or `axios` calls to `/api/checkout/` in any client-side code (browser-executed JavaScript, frontend source files) → STOP immediately. All checkout calls must route through BFF endpoints.
+If you see `fetch` or `axios` calls to `vtexcommercestable.com.br/api/checkout/...` in any client-side code (browser-executed JavaScript, frontend source files) → STOP immediately. All Checkout API calls must route through BFF endpoints.
 
 **Correct**
 
 ```typescript
 // Frontend — calls BFF endpoint, never VTEX directly
-async function addItemToCart(skuId: string, quantity: number, seller: string): Promise<OrderForm> {
+async function addItemToCart(
+  skuId: string,
+  quantity: number,
+  seller: string,
+): Promise<OrderForm> {
   const response = await fetch("/api/bff/cart/items", {
     method: "POST",
     credentials: "include",
@@ -1578,7 +1595,11 @@ async function addItemToCart(skuId: string, quantity: number, seller: string): P
 
 ```typescript
 // Frontend — calls VTEX Checkout API directly (SECURITY VULNERABILITY)
-async function addItemToCart(skuId: string, quantity: number, seller: string): Promise<OrderForm> {
+async function addItemToCart(
+  skuId: string,
+  quantity: number,
+  seller: string,
+): Promise<OrderForm> {
   const orderFormId = localStorage.getItem("orderFormId"); // Also wrong: see next constraint
   const response = await fetch(
     `https://mystore.vtexcommercestable.com.br/api/checkout/pub/orderForm/${orderFormId}/items`,
@@ -1588,10 +1609,121 @@ async function addItemToCart(skuId: string, quantity: number, seller: string): P
       body: JSON.stringify({
         orderItems: [{ id: skuId, quantity, seller }],
       }),
-    }
+    },
   );
   return response.json();
 }
+```
+
+---
+
+### Constraint: Card data MUST go directly from browser/app to vtexpayments.com.br — never through the BFF
+
+The Send payments information call (`POST https://{account}.vtexpayments.com.br/api/pub/transactions/{tid}/payments?orderId={orderGroup}`) carries card data when the shopper pays with a credit, debit, or co-branded card. This call MUST originate from the shopper's browser or native app and MUST target `vtexpayments.com.br` directly. The BFF MUST NOT proxy this call when card data is involved, even with redaction, even with `appKey`/`appToken` on the server side, and even when only "tokenized" fields appear to be forwarded.
+
+This is the inverse of the previous constraint. Treating it as a generic "checkout" call and routing it through the BFF — as some agents do when applying the "all checkout through BFF" rule too broadly — is a PCI DSS violation, not a security improvement.
+
+**Why this matters**
+
+The merchant operating the headless storefront is rarely PCI DSS Level 1 certified. Routing card numbers, holder names, or CVV through the merchant's BFF places the BFF and every system it touches — application logs, APM/observability tools, reverse proxies, load balancers, error trackers — inside PCI scope. Operating a non-PCI environment that handles card data violates PCI DSS Requirements 3 and 4 and can result in fines from $5,000 to over $100,000 per month from card networks, mandatory forensic investigation costs, loss of card processing ability, and legal liability.
+
+The browser → `vtexpayments.com.br` path is the PCI-compliant pattern: the VTEX Payment Gateway is PCI DSS Level 1 certified and is the only environment in this flow authorized to receive raw card data. The Send payments call is authenticated by the shopper's session cookies set by the previous Place Order step — no merchant credentials are needed on the BFF for this hop.
+
+**Detection**
+
+If you find any of the following in BFF / server-side code (`server/`, `bff/`, `api/`, route handlers, middleware, edge functions, lambdas), STOP immediately:
+
+- A request from the BFF to `https://*.vtexpayments.com.br/api/pub/transactions/.../payments`,
+- A handler that accepts `cardNumber`, `holderName`, `validationCode`, `csc`, `dueDate`, or full payment `fields` from the browser and forwards them to any VTEX endpoint,
+- A "Payments client" / `ExternalClient` / `axios` instance that targets `vtexpayments.com.br` for the Send payments information endpoint.
+
+Move that call to the browser/app. The BFF should instead return `transactionId`, `orderGroup`, and `merchantName` from the Place Order step so the frontend can post payment data directly to the Payment Gateway.
+
+This rule applies even when:
+
+- The merchant has a VTEX `appKey`/`appToken` with payment permissions — possessing the credentials does not grant PCI authorization.
+- Only "tokenized" card fields are forwarded — token values still reference real card data and are in PCI scope.
+- The BFF code "redacts" sensitive fields before logging — the request still transits the merchant infrastructure before redaction.
+- The BFF runs on a private VPC with TLS — PCI scope is determined by what data passes through, not by how the network is configured.
+
+**Correct**
+
+```typescript
+async function sendPaymentDataDirect(args: {
+  account: string;
+  transactionId: string;
+  orderGroup: string;
+  merchantName: string;
+  paymentInformation: PaymentField[];
+}): Promise<void> {
+  const {
+    account,
+    transactionId,
+    orderGroup,
+    merchantName,
+    paymentInformation,
+  } = args;
+
+  const response = await fetch(
+    `https://${account}.vtexpayments.com.br/api/pub/transactions/${transactionId}/payments?orderId=${orderGroup}`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(
+        paymentInformation.map((p) => ({
+          ...p,
+          transaction: { id: transactionId, merchantName },
+        })),
+      ),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Payment submission failed: ${response.status}`);
+  }
+}
+```
+
+**Wrong**
+
+```typescript
+const VTEX_APP_KEY = process.env.VTEX_APP_KEY!;
+const VTEX_APP_TOKEN = process.env.VTEX_APP_TOKEN!;
+
+paymentRoutes.post("/", async (req: Request, res: Response) => {
+  const { transactionId, orderGroup, paymentInformation } = req.body as {
+    transactionId: string;
+    orderGroup: string;
+    paymentInformation: Array<{
+      paymentSystem: number;
+      installments: number;
+      value: number;
+      fields: {
+        cardNumber: string;
+        holderName: string;
+        validationCode: string;
+        dueDate: string;
+      };
+    }>;
+  };
+
+  const url = `https://${process.env.VTEX_ACCOUNT}.vtexpayments.com.br/api/pub/transactions/${transactionId}/payments?orderId=${orderGroup}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-VTEX-API-AppKey": VTEX_APP_KEY,
+      "X-VTEX-API-AppToken": VTEX_APP_TOKEN,
+    },
+    body: JSON.stringify(paymentInformation),
+  });
+
+  res.json({ status: response.status });
+});
 ```
 
 ---
@@ -1651,7 +1783,9 @@ cartRoutes.get("/", async (req: Request, res: Response) => {
 });
 
 // Remove sensitive data before sending to frontend
-function sanitizeOrderForm(orderForm: Record<string, unknown>): Record<string, unknown> {
+function sanitizeOrderForm(
+  orderForm: Record<string, unknown>,
+): Record<string, unknown> {
   const sanitized = { ...orderForm };
   delete sanitized._cookies;
   return sanitized;
@@ -1667,7 +1801,7 @@ async function getCart(): Promise<OrderForm> {
 
   if (!orderFormId) {
     const response = await fetch(
-      "https://mystore.vtexcommercestable.com.br/api/checkout/pub/orderForm"
+      "https://mystore.vtexcommercestable.com.br/api/checkout/pub/orderForm",
     );
     const data = await response.json();
     orderFormId = data.orderFormId;
@@ -1675,10 +1809,108 @@ async function getCart(): Promise<OrderForm> {
   }
 
   const response = await fetch(
-    `https://mystore.vtexcommercestable.com.br/api/checkout/pub/orderForm/${orderFormId}`
+    `https://mystore.vtexcommercestable.com.br/api/checkout/pub/orderForm/${orderFormId}`,
   );
   return response.json();
 }
+```
+
+---
+
+### Constraint: Multi-step order flow handoffs MUST travel in the request body, not in `req.session`
+
+Values that link `/place` (Step 1) and `/process` (Step 3) — most importantly `orderGroup`, but also any per-attempt `transactionId` or merchant context the frontend needs to echo back — MUST be returned by `/place` to the browser and sent back by the browser in the `/process` request body. The handler MUST NOT rely on `req.session.pendingOrderGroup` (or any per-pod cache) as the only source of truth for the in-flight order.
+
+**Why this matters**
+
+Production BFFs run multiple replicas (Kubernetes deployments, ECS services, lambdas behind an ALB, edge runtimes). `express-session` defaults to `MemoryStore`, which is per-pod, so a session value written on one pod is invisible to every other pod. Even with a shared session store (Redis, DynamoDB, Memcached), Step 1 and Step 3 fire as fast as the user can roundtrip through `vtexpayments.com.br`, so any partial Redis outage, write replication lag, sticky-routing failure, tab refresh, or session regeneration on login surfaces as `400 — no pending order to process`. From the shopper's point of view the order is paid (their card was charged in Step 2) but the storefront reports failure, and support has to reconcile by hand. The 5-minute order processing window leaves no time for retries.
+
+`orderGroup` is not a secret. It already returns to the browser from Step 1 and is required by the direct browser → `vtexpayments.com.br` call in Step 2. Echoing it back in Step 3 is strictly less surface area than session-backed state. Authentication and ownership are still enforced server-side through the session-bound `vtexCookies`, `orderFormId`, and (when present) `vtexAuthToken` — the BFF never trusts `orderGroup` alone.
+
+**Detection**
+
+If you find any of the following in BFF / server-side checkout code, STOP immediately:
+
+- Any read or write of `req.session.pendingOrderGroup`, `req.session.orderGroup`, `req.session.lastTransactionId`, or similar per-flow values written in `/place` and read in `/process`.
+- A `/process` (or `/gatewayCallback`) handler whose only source of `orderGroup` is `req.session`, with no `req.body.orderGroup` fallback or validation.
+- A frontend `placeOrder` flow that calls `/api/bff/order/process` with no body and no `orderGroup`, relying on the BFF to "remember" the order.
+- Comments like "// rely on session to recover orderGroup" or commits that move `orderGroup` from request bodies into the session for "tidiness".
+
+**Correct**
+
+```typescript
+orderRoutes.post("/place", async (req: Request, res: Response) => {
+  const orderFormId = req.session.orderFormId;
+  if (!orderFormId) return res.status(400).json({ error: "No active cart" });
+
+  const { data } = await vtexCheckout<PlaceOrderResponse>({
+    path: `/api/checkout/pub/orderForm/${orderFormId}/transaction`,
+    method: "POST",
+    body: { referenceId: orderFormId },
+    cookies: req.session.vtexCookies || {},
+    userToken: req.session.vtexAuthToken,
+  });
+
+  res.json({
+    account: process.env.VTEX_ACCOUNT,
+    orderId: data.orders[0].orderId,
+    orderGroup: data.orderGroup,
+    transactionId: data.orders[0].transactionData.merchantTransactions[0].transactionId,
+    merchantName: data.orders[0].transactionData.merchantTransactions[0].merchantName,
+  });
+});
+
+orderRoutes.post("/process", async (req: Request, res: Response) => {
+  const orderGroup =
+    typeof req.body?.orderGroup === "string" ? req.body.orderGroup : undefined;
+  if (!orderGroup || !/^[A-Za-z0-9-]+$/.test(orderGroup)) {
+    return res.status(400).json({ error: "Missing or invalid orderGroup" });
+  }
+  if (!req.session.orderFormId) {
+    return res.status(400).json({ error: "No active checkout session" });
+  }
+
+  await vtexCheckout({
+    path: `/api/checkout/pub/gatewayCallback/${orderGroup}`,
+    method: "POST",
+    cookies: req.session.vtexCookies || {},
+  });
+
+  delete req.session.orderFormId;
+  delete req.session.vtexCookies;
+  res.json({ orderGroup, status: "processed" });
+});
+```
+
+The matching browser flow — `/place` returns `orderGroup` and the browser echoes it back in the `/process` body — is shown in the Preferred pattern below.
+
+**Wrong**
+
+```typescript
+orderRoutes.post("/place", async (req: Request, res: Response) => {
+  // ... call /transaction ...
+  req.session.pendingOrderGroup = orderGroup;
+  res.json({ account, orderId, orderGroup, transactionId, merchantName });
+});
+
+orderRoutes.post("/process", async (req: Request, res: Response) => {
+  // BUG: works in dev with one Node process and MemoryStore, returns
+  // `400 — no pending order to process` the moment the load balancer routes
+  // /place and /process to different replicas.
+  const orderGroup = req.session.pendingOrderGroup;
+  if (!orderGroup) {
+    return res.status(400).json({ error: "No pending order to process" });
+  }
+
+  await vtexCheckout({
+    path: `/api/checkout/pub/gatewayCallback/${orderGroup}`,
+    method: "POST",
+    cookies: req.session.vtexCookies || {},
+  });
+
+  delete req.session.pendingOrderGroup;
+  res.json({ status: "processed" });
+});
 ```
 
 ---
@@ -1730,7 +1962,8 @@ cartItemsRoutes.post("/", async (req: Request, res: Response) => {
   if (!validateAddItemInput(req.body)) {
     return res.status(400).json({
       error: "Invalid input",
-      details: "skuId must be numeric, quantity must be 1-100, seller must be alphanumeric",
+      details:
+        "skuId must be numeric, quantity must be 1-100, seller must be alphanumeric",
     });
   }
 
@@ -1820,7 +2053,7 @@ interface CheckoutResponse<T = unknown> {
 }
 
 export async function vtexCheckout<T>(
-  options: CheckoutRequestOptions
+  options: CheckoutRequestOptions,
 ): Promise<CheckoutResponse<T>> {
   const { path, method = "GET", body, cookies = {}, userToken } = options;
 
@@ -1835,7 +2068,9 @@ export async function vtexCheckout<T>(
     cookieParts.push(`checkout.vtex.com=${cookies["checkout.vtex.com"]}`);
   }
   if (cookies["CheckoutOrderFormOwnership"]) {
-    cookieParts.push(`CheckoutOrderFormOwnership=${cookies["CheckoutOrderFormOwnership"]}`);
+    cookieParts.push(
+      `CheckoutOrderFormOwnership=${cookies["CheckoutOrderFormOwnership"]}`,
+    );
   }
   if (userToken) {
     cookieParts.push(`VtexIdclientAutCookie=${userToken}`);
@@ -1853,7 +2088,7 @@ export async function vtexCheckout<T>(
   if (!response.ok) {
     const errorBody = await response.text();
     throw new Error(
-      `Checkout API error: ${response.status} for ${method} ${path}: ${errorBody}`
+      `Checkout API error: ${response.status} for ${method} ${path}: ${errorBody}`,
     );
   }
 
@@ -1914,14 +2149,23 @@ cartRoutes.post("/items", async (req: Request, res: Response) => {
   }
 
   for (const item of items) {
-    if (!item.id || typeof item.quantity !== "number" || item.quantity < 1 || !item.seller) {
-      return res.status(400).json({ error: "Each item must have id, quantity (>0), and seller" });
+    if (
+      !item.id ||
+      typeof item.quantity !== "number" ||
+      item.quantity < 1 ||
+      !item.seller
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Each item must have id, quantity (>0), and seller" });
     }
   }
 
   const orderFormId = req.session.orderFormId;
   if (!orderFormId) {
-    return res.status(400).json({ error: "No active cart. Call GET /api/bff/cart first." });
+    return res
+      .status(400)
+      .json({ error: "No active cart. Call GET /api/bff/cart first." });
   }
 
   try {
@@ -1942,22 +2186,24 @@ cartRoutes.post("/items", async (req: Request, res: Response) => {
 });
 ```
 
-Order placement — all 3 steps in a single handler to respect the **5-minute window**:
+Order placement — Steps 1 and 3 run in the BFF; Step 2 runs in the browser per the PCI carve-out. All 3 steps must complete within the **5-minute window**.
 
 ```typescript
-// server/routes/order.ts
+// server/routes/order.ts — BFF handles Step 1 (place) and Step 3 (process) only.
+// Step 2 (send payment data) runs in the browser; see the card-data carve-out constraint.
 import { Router, Request, Response } from "express";
 import { vtexCheckout } from "../vtex-checkout-client";
 
 export const orderRoutes = Router();
 
 const VTEX_ACCOUNT = process.env.VTEX_ACCOUNT!;
-const VTEX_ENVIRONMENT = process.env.VTEX_ENVIRONMENT || "vtexcommercestable";
-const VTEX_APP_KEY = process.env.VTEX_APP_KEY!;
-const VTEX_APP_TOKEN = process.env.VTEX_APP_TOKEN!;
 
-// POST /api/bff/order/place — place order from existing cart
-// CRITICAL: All 3 steps must complete within 5 minutes or the order is canceled
+// POST /api/bff/order/place — Step 1: place order from existing cart.
+// Returns the data the browser needs to call vtexpayments.com.br directly in
+// Step 2 AND to call /api/bff/order/process in Step 3. The browser is the
+// authority for `orderGroup` between Step 1 and Step 3 — the BFF does NOT
+// stash it in `req.session`, because that would silently break in any
+// multi-replica deployment whose session store is in-memory or sticky-routed.
 orderRoutes.post("/place", async (req: Request, res: Response) => {
   const orderFormId = req.session.orderFormId;
   if (!orderFormId) {
@@ -1965,7 +2211,6 @@ orderRoutes.post("/place", async (req: Request, res: Response) => {
   }
 
   try {
-    // Step 1: Place order — starts the 5-minute timer
     const placeResult = await vtexCheckout<PlaceOrderResponse>({
       path: `/api/checkout/pub/orderForm/${orderFormId}/transaction`,
       method: "POST",
@@ -1975,78 +2220,100 @@ orderRoutes.post("/place", async (req: Request, res: Response) => {
     });
 
     const { orders, orderGroup } = placeResult.data;
-
-    if (!orders || orders.length === 0) {
-      return res.status(500).json({ error: "Order placement returned no orders" });
+    if (!orders?.length) {
+      return res
+        .status(500)
+        .json({ error: "Order placement returned no orders" });
     }
 
     const orderId = orders[0].orderId;
-    const transactionId =
-      orders[0].transactionData.merchantTransactions[0]?.transactionId;
-
-    // Step 2: Send payment — immediately after placement
-    const { paymentData } = req.body as {
-      paymentData: {
-        paymentSystem: number;
-        installments: number;
-        value: number;
-        referenceValue: number;
-      };
-    };
-
-    if (!paymentData) {
-      return res.status(400).json({ error: "Payment data is required" });
-    }
-
-    const paymentUrl = `https://${VTEX_ACCOUNT}.${VTEX_ENVIRONMENT}.com.br/api/payments/transactions/${transactionId}/payments`;
-    const paymentResponse = await fetch(paymentUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-VTEX-API-AppKey": VTEX_APP_KEY,
-        "X-VTEX-API-AppToken": VTEX_APP_TOKEN,
-      },
-      body: JSON.stringify([
-        {
-          paymentSystem: paymentData.paymentSystem,
-          installments: paymentData.installments,
-          currencyCode: "BRL",
-          value: paymentData.value,
-          installmentsInterestRate: 0,
-          installmentsValue: paymentData.value,
-          referenceValue: paymentData.referenceValue,
-          fields: {},
-          transaction: { id: transactionId, merchantName: VTEX_ACCOUNT },
-        },
-      ]),
-    });
-
-    if (!paymentResponse.ok) {
-      return res.status(500).json({ error: "Payment submission failed" });
-    }
-
-    // Step 3: Process order — immediately after payment
-    await vtexCheckout<unknown>({
-      path: `/api/checkout/pub/gatewayCallback/${orderGroup}`,
-      method: "POST",
-      cookies: req.session.vtexCookies || {},
-    });
-
-    // Clear cart session after successful order
-    delete req.session.orderFormId;
-    delete req.session.vtexCookies;
+    const merchantTransaction =
+      orders[0].transactionData.merchantTransactions[0];
+    const transactionId = merchantTransaction?.transactionId;
+    const merchantName = merchantTransaction?.merchantName ?? VTEX_ACCOUNT;
 
     res.json({
+      account: VTEX_ACCOUNT,
       orderId,
       orderGroup,
       transactionId,
-      status: "placed",
+      merchantName,
     });
   } catch (error) {
     console.error("Error placing order:", error);
     res.status(500).json({ error: "Failed to place order" });
   }
 });
+
+// POST /api/bff/order/process — Step 3: process gateway callback after the
+// browser has submitted payment data directly to vtexpayments.com.br in Step 2.
+// Carries no card data; safe to run server-side. The browser passes back the
+// same `orderGroup` it received from /place so the handler is stateless across
+// replicas. The BFF still validates ownership through the session-bound
+// orderFormId + checkout cookies before calling VTEX.
+orderRoutes.post("/process", async (req: Request, res: Response) => {
+  const orderGroup =
+    typeof req.body?.orderGroup === "string" ? req.body.orderGroup : undefined;
+  if (!orderGroup || !/^[A-Za-z0-9-]+$/.test(orderGroup)) {
+    return res.status(400).json({ error: "Missing or invalid orderGroup" });
+  }
+  if (!req.session.orderFormId) {
+    return res.status(400).json({ error: "No active checkout session" });
+  }
+
+  try {
+    await vtexCheckout<unknown>({
+      path: `/api/checkout/pub/gatewayCallback/${orderGroup}`,
+      method: "POST",
+      cookies: req.session.vtexCookies || {},
+    });
+
+    delete req.session.orderFormId;
+    delete req.session.vtexCookies;
+
+    res.json({ orderGroup, status: "processed" });
+  } catch (error) {
+    console.error("Error processing order:", error);
+    res.status(500).json({ error: "Failed to process order" });
+  }
+});
+```
+
+```typescript
+// frontend/checkout/placeOrder.ts — Step 2 runs in the browser.
+// Card fields stay on the device; the BFF never sees them.
+// Step 3 echoes `orderGroup` back to the BFF in the request body so it works
+// the same way whether the BFF runs on one pod or fifty.
+async function placeOrderWithCard(card: CardPaymentInformation) {
+  const placeResp = await fetch("/api/bff/order/place", {
+    method: "POST",
+    credentials: "include",
+  });
+  const { account, orderGroup, transactionId, merchantName } =
+    await placeResp.json();
+
+  await fetch(
+    `https://${account}.vtexpayments.com.br/api/pub/transactions/${transactionId}/payments?orderId=${orderGroup}`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        { ...card, transaction: { id: transactionId, merchantName } },
+      ]),
+    },
+  );
+
+  await fetch("/api/bff/order/process", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orderGroup }),
+  });
+}
 ```
 
 ## Common failure modes
@@ -2074,60 +2341,79 @@ orderRoutes.post("/place", async (req: Request, res: Response) => {
   });
   ```
 
-- **Ignoring the 5-minute order processing window**: Placing an order (step 1) but delaying payment or processing beyond 5 minutes causes VTEX to automatically cancel the order as `incomplete`. Execute all three steps (place order → send payment → process order) sequentially and immediately in a single BFF request handler. Never split these across multiple independent frontend calls.
+- **Ignoring the 5-minute order processing window**: Placing an order (Step 1) but delaying payment or processing beyond 5 minutes causes VTEX to automatically cancel the order as `incomplete`. Execute Steps 1 → 2 → 3 sequentially and immediately as a single user interaction. Step 1 (place) and Step 3 (gateway callback) run in the BFF; Step 2 (send payment data) runs in the browser per the card-data carve-out above. Do not pause for additional UI between steps.
 
   ```typescript
-  // Execute all 3 steps in a single, synchronous flow
-  orderRoutes.post("/place", async (req: Request, res: Response) => {
-    try {
-      // Step 1: Place order — starts the 5-minute timer
-      const placeResult = await vtexCheckout<PlaceOrderResponse>({
-        path: `/api/checkout/pub/orderForm/${req.session.orderFormId}/transaction`,
-        method: "POST",
-        body: { referenceId: req.session.orderFormId },
-        cookies: req.session.vtexCookies || {},
-      });
+  // Frontend orchestrates Place (BFF) → Pay (browser → vtexpayments.com.br) → Process (BFF)
+  // on a single click, well within the 5-minute window.
+  async function onPlaceOrderClick(card: CardPaymentInformation) {
+    const { account, orderGroup, transactionId, merchantName } =
+      await fetchJson("/api/bff/order/place", { method: "POST" });
 
-      // Step 2: Send payment — immediately after placement
-      await sendPayment(placeResult.data);
+    await sendPaymentDirectToGateway({
+      account,
+      transactionId,
+      orderGroup,
+      merchantName,
+      card,
+    });
 
-      // Step 3: Process order — immediately after payment
-      await processOrder(placeResult.data.orderGroup);
-
-      res.json({ success: true, orderId: placeResult.data.orders[0].orderId });
-    } catch (error) {
-      console.error("Order placement failed:", error);
-      res.status(500).json({ error: "Order placement failed" });
-    }
-  });
+    await fetchJson("/api/bff/order/process", {
+      method: "POST",
+      body: { orderGroup },
+    });
+  }
   ```
+
+- **Proxying `vtexpayments.com.br` payment submission through the BFF "for consistency"**: Routing the Send payments information call through the BFF feels symmetrical with the rest of the BFF mandate, and some agents add it to "centralize all VTEX calls". When card data is involved this is a PCI DSS violation, not a refactor. Keep Step 2 in the browser; the BFF should expose `/api/bff/order/place` (returns `transactionId`/`orderGroup`/`merchantName`) and `/api/bff/order/process` (calls `/gatewayCallback`) but never `/api/bff/order/payment` for card flows.
+
+- **Storing `orderGroup` in `req.session` between `/place` and `/process`**: Writing `req.session.pendingOrderGroup` in Step 1 and reading it in Step 3 looks tidy and works in single-process local development. With `express-session`'s default `MemoryStore` (and any per-pod cache) a horizontally scaled BFF loses the value the moment the two requests land on different replicas, so `/process` returns `400 — no pending order to process` while the shopper's card has already been charged in Step 2. Return `orderGroup` from `/place` to the browser and require the browser to send it back in the `/process` body — see the dedicated hard constraint above. Even with a shared session store (Redis, Memcached, database) in place for `orderFormId`/`vtexCookies`, the cross-step handoff still belongs in the request body so the flow stays correct under partial outages, sticky-routing failures, replication lag, and tab refresh.
 
 - **Exposing raw VTEX error messages to the frontend**: Forwarding VTEX API error responses directly to the frontend leaks internal details (account names, API paths, data structures). Map VTEX errors to user-friendly messages in the BFF and log the full error server-side.
 
   ```typescript
   // Map VTEX errors to safe, user-friendly messages
-  function mapCheckoutError(vtexError: string, statusCode: number): { code: string; message: string } {
+  function mapCheckoutError(
+    vtexError: string,
+    statusCode: number,
+  ): { code: string; message: string } {
     if (statusCode === 400 && vtexError.includes("item")) {
-      return { code: "INVALID_ITEM", message: "One or more items are unavailable" };
+      return {
+        code: "INVALID_ITEM",
+        message: "One or more items are unavailable",
+      };
     }
     if (statusCode === 400 && vtexError.includes("address")) {
-      return { code: "INVALID_ADDRESS", message: "Please check your shipping address" };
+      return {
+        code: "INVALID_ADDRESS",
+        message: "Please check your shipping address",
+      };
     }
     if (statusCode === 409) {
-      return { code: "CART_CONFLICT", message: "Your cart was updated. Please review your items." };
+      return {
+        code: "CART_CONFLICT",
+        message: "Your cart was updated. Please review your items.",
+      };
     }
-    return { code: "CHECKOUT_ERROR", message: "An error occurred during checkout. Please try again." };
+    return {
+      code: "CHECKOUT_ERROR",
+      message: "An error occurred during checkout. Please try again.",
+    };
   }
   ```
 
 ## Review checklist
 
-- [ ] Are ALL checkout API calls routed through the BFF (no direct frontend calls to `/api/checkout/`)?
+- [ ] Are ALL Checkout API calls (`vtexcommercestable.com.br/api/checkout/...`) routed through the BFF (no direct frontend calls)?
+- [ ] Is the Send payments information call (`vtexpayments.com.br/api/pub/transactions/{tid}/payments`) sent from the browser/app directly, NOT proxied through the BFF, when card data is involved?
+- [ ] Are `cardNumber`, `holderName`, `validationCode`/`csc`, and `dueDate` absent from every BFF route handler and log statement?
+- [ ] Does any reference to `vtexpayments.com.br` in the codebase appear only in browser/app code, never in `server/`, `bff/`, `api/`, or other backend directories?
 - [ ] Is `orderFormId` stored in a server-side session, not in `localStorage` or `sessionStorage`?
 - [ ] Are `CheckoutOrderFormOwnership` and `checkout.vtex.com` cookies captured from VTEX responses and forwarded on subsequent requests?
 - [ ] Are all inputs validated server-side before forwarding to VTEX?
-- [ ] Does the order placement handler execute all 3 steps (place → pay → process) in a single synchronous flow within the 5-minute window?
+- [ ] Do all 3 order-placement steps (place → pay → process) execute as a single user interaction within the 5-minute window, with Steps 1 and 3 in the BFF and Step 2 in the browser direct to `vtexpayments.com.br`?
 - [ ] Is the existing `orderFormId` reused from the session rather than creating a new cart on every page load?
+- [ ] Is `orderGroup` returned by `/place` and sent back by the browser in the `/process` request body, instead of being stashed in `req.session.pendingOrderGroup` between the two BFF calls?
 - [ ] Are VTEX error responses sanitized before being sent to the frontend?
 
 ## Reference
@@ -7299,12 +7585,14 @@ async function cancelPaymentHandler(req: Request, res: Response): Promise<void> 
 ## When this skill applies
 
 Use this skill when:
+
 - Building a payment connector that accepts credit cards, debit cards, or co-branded cards
 - The connector needs to process card data or communicate with an acquirer
 - Determining whether Secure Proxy is required for the hosting environment
 - Auditing a connector for PCI DSS compliance (data storage, logging, transmission)
 
 Do not use this skill for:
+
 - PPP endpoint contracts and response shapes — use [`payment-provider-protocol`](../payment-provider-protocol/skill.md)
 - Idempotency and duplicate prevention — use [`payment-idempotency`](../payment-idempotency/skill.md)
 - Async payment flows (Boleto, Pix) and callbacks — use [`payment-async-flow`](../payment-async-flow/skill.md)
@@ -7332,8 +7620,12 @@ Non-PCI environments are not authorized to handle raw card data. Calling the acq
 If the connector calls an acquirer endpoint directly (without going through `secureProxyUrl`) when `secureProxyUrl` is present in the request, STOP immediately. All acquirer communication must go through the Secure Proxy.
 
 **Correct**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { paymentId, secureProxyUrl, card } = req.body;
 
   if (secureProxyUrl) {
@@ -7349,9 +7641,9 @@ async function createPaymentHandler(req: Request, res: Response): Promise<void> 
       body: JSON.stringify({
         orderId: paymentId,
         payment: {
-          cardNumber: card.numberToken,     // Token, not real number
-          holder: card.holderToken,          // Token, not real name
-          securityCode: card.cscToken,       // Token, not real CVV
+          cardNumber: card.numberToken, // Token, not real number
+          holder: card.holderToken, // Token, not real name
+          securityCode: card.cscToken, // Token, not real CVV
           expirationMonth: card.expiration.month,
           expirationYear: card.expiration.year,
         },
@@ -7365,8 +7657,12 @@ async function createPaymentHandler(req: Request, res: Response): Promise<void> 
 ```
 
 **Wrong**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { paymentId, secureProxyUrl, card } = req.body;
 
   // WRONG: Calling acquirer directly, bypassing Secure Proxy
@@ -7375,7 +7671,7 @@ async function createPaymentHandler(req: Request, res: Response): Promise<void> 
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "MerchantId": process.env.ACQUIRER_MERCHANT_ID!,
+      MerchantId: process.env.ACQUIRER_MERCHANT_ID!,
     },
     body: JSON.stringify({
       orderId: paymentId,
@@ -7418,7 +7714,7 @@ export class PspSecureClient extends SecureExternalClient {
   public async authorize(data: object, secureProxyUrl: string) {
     return this.http.post("/payments", data, {
       secureProxy: secureProxyUrl,
-    } as any)
+    } as any);
   }
 }
 
@@ -7427,9 +7723,13 @@ import { ExternalClient } from "@vtex/api";
 
 export class PspClient extends ExternalClient {
   public async capture(tid: string, amount: number) {
-    return this.http.post(`/payments/${tid}/capture`, { amount }, {
-      headers: { "X-API-Key": "..." },
-    })
+    return this.http.post(
+      `/payments/${tid}/capture`,
+      { amount },
+      {
+        headers: { "X-API-Key": "..." },
+      },
+    );
   }
 }
 ```
@@ -7444,6 +7744,108 @@ async settle(request: SettlementRequest) {
 }
 ```
 
+### Constraint: Headless storefront BFFs MUST NOT proxy card data to vtexpayments.com.br
+
+In a headless storefront, the Send payments information call (`POST https://{account}.vtexpayments.com.br/api/pub/transactions/{tid}/payments`) MUST originate from the shopper's browser or native app. The merchant's BFF (Node, Next.js route handler, edge function, lambda, reverse proxy, or any server-side component) MUST NOT receive card fields from the browser and MUST NOT forward them to the Payment Gateway, even with redaction, even with `appKey`/`appToken` on the server side, and even when only "tokenized" fields appear to be forwarded.
+
+This constraint extends the same PCI principle that drives Secure Proxy: a non-PCI environment is not allowed to handle card data. For payment connectors that environment is the IO app; for headless storefronts it is the merchant BFF. The destination differs — Secure Proxy protects the connector → acquirer path, the browser → `vtexpayments.com.br` pattern protects the storefront → Payment Gateway path — but the rule is identical: keep raw card data inside the certified perimeter.
+
+**Why this matters**
+
+The merchant operating the headless storefront is rarely PCI DSS Level 1 certified. Routing card numbers, holder names, or CVV through the merchant's BFF places the BFF and every system it touches (application logs, APM, reverse proxies, load balancers, error trackers) inside PCI scope. Operating a non-PCI environment that handles card data violates PCI DSS Requirements 3 and 4 and can result in fines from $5,000 to over $100,000 per month from card networks, mandatory forensic investigation costs, loss of card processing ability, class-action exposure, and criminal liability in some jurisdictions.
+
+The VTEX Payment Gateway (`vtexpayments.com.br`) is PCI DSS Level 1 certified. The browser → Payment Gateway path keeps card data inside the certified perimeter; the merchant BFF stays out of the card-data flow entirely. The Send payments information endpoint is authenticated by the shopper's session cookies set during the previous Place Order step — no merchant credentials are required for this hop.
+
+**Detection**
+
+If you find any of the following in BFF / server-side code (`server/`, `bff/`, `api/`, route handlers, middleware, edge functions, lambdas), STOP immediately:
+
+- A request from the BFF to `https://*.vtexpayments.com.br/api/pub/transactions/.../payments`,
+- A handler that accepts `cardNumber`, `holderName`, `validationCode`, `csc`, `dueDate`, or full payment `fields` from the browser,
+- A "Payments client" / `ExternalClient` / `axios` instance on the server pointing at `vtexpayments.com.br` for the Send payments information endpoint.
+
+The BFF should expose `/api/bff/order/place` (returns `transactionId`, `orderGroup`, `merchantName`) and `/api/bff/order/process` (calls `/api/checkout/pub/gatewayCallback/{orderGroup}` — no card data) but never an endpoint that forwards card fields to `vtexpayments.com.br`.
+
+**Correct**
+
+```typescript
+async function sendPaymentDataDirect(args: {
+  account: string;
+  transactionId: string;
+  orderGroup: string;
+  merchantName: string;
+  paymentInformation: PaymentField[];
+}): Promise<void> {
+  const {
+    account,
+    transactionId,
+    orderGroup,
+    merchantName,
+    paymentInformation,
+  } = args;
+
+  const response = await fetch(
+    `https://${account}.vtexpayments.com.br/api/pub/transactions/${transactionId}/payments?orderId=${orderGroup}`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(
+        paymentInformation.map((p) => ({
+          ...p,
+          transaction: { id: transactionId, merchantName },
+        })),
+      ),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Payment submission failed: ${response.status}`);
+  }
+}
+```
+
+**Wrong**
+
+```typescript
+const VTEX_APP_KEY = process.env.VTEX_APP_KEY!;
+const VTEX_APP_TOKEN = process.env.VTEX_APP_TOKEN!;
+
+paymentRoutes.post("/", async (req: Request, res: Response) => {
+  const { transactionId, orderGroup, paymentInformation } = req.body as {
+    transactionId: string;
+    orderGroup: string;
+    paymentInformation: Array<{
+      paymentSystem: number;
+      installments: number;
+      value: number;
+      fields: {
+        cardNumber: string;
+        holderName: string;
+        validationCode: string;
+        dueDate: string;
+      };
+    }>;
+  };
+
+  const url = `https://${process.env.VTEX_ACCOUNT}.vtexpayments.com.br/api/pub/transactions/${transactionId}/payments?orderId=${orderGroup}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-VTEX-API-AppKey": VTEX_APP_KEY,
+      "X-VTEX-API-AppToken": VTEX_APP_TOKEN,
+    },
+    body: JSON.stringify(paymentInformation),
+  });
+
+  res.json({ status: response.status });
+});
+```
+
 ### Constraint: MUST NOT store raw card data
 
 The connector MUST NOT store the full card number (PAN), CVV/CSC, cardholder name, or any card token values in any persistent storage — database, file system, cache, session store, or any other durable medium. Card data must only exist in memory during the request lifecycle.
@@ -7455,16 +7857,20 @@ Storing raw card data violates PCI DSS Requirement 3. A data breach exposes cust
 If the code writes card number, CVV, cardholder name, or token values to a database, file, cache (Redis, VBase), or any persistent store, STOP immediately. Only `card.bin` (first 6 digits) and `card.numberLength` may be stored.
 
 **Correct**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { paymentId, card, secureProxyUrl } = req.body;
 
   // Only store non-sensitive card metadata
   await paymentStore.save(paymentId, {
     paymentId,
-    cardBin: card.bin,            // First 6 digits — safe to store
-    cardNumberLength: card.numberLength,  // Length — safe to store
-    cardExpMonth: card.expiration.month,  // Expiration — safe to store
+    cardBin: card.bin, // First 6 digits — safe to store
+    cardNumberLength: card.numberLength, // Length — safe to store
+    cardExpMonth: card.expiration.month, // Expiration — safe to store
     cardExpYear: card.expiration.year,
     // DO NOT store: card.numberToken, card.holderToken, card.cscToken
   });
@@ -7478,15 +7884,19 @@ async function createPaymentHandler(req: Request, res: Response): Promise<void> 
 ```
 
 **Wrong**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { paymentId, card } = req.body;
 
   // CRITICAL PCI VIOLATION: Storing full card data in database
   await database.query(
     `INSERT INTO payments (payment_id, card_number, cvv, holder_name)
      VALUES ($1, $2, $3, $4)`,
-    [paymentId, card.number, card.csc, card.holder]
+    [paymentId, card.number, card.csc, card.holder],
   );
   // This single line can result in:
   // - $100K/month fines from card networks
@@ -7507,8 +7917,12 @@ Logs are typically stored in plaintext, retained for extended periods, and acces
 If the code contains `console.log`, `console.error`, `logger.info`, `logger.debug`, or any logging call that includes `card.number`, `card.csc`, `card.holder`, `card.numberToken`, `card.holderToken`, `card.cscToken`, or the full request body without redaction, STOP immediately. Redact or omit all sensitive fields before logging.
 
 **Correct**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { paymentId, card, paymentMethod, value } = req.body;
 
   // Safe logging — only non-sensitive fields
@@ -7516,15 +7930,17 @@ async function createPaymentHandler(req: Request, res: Response): Promise<void> 
     paymentId,
     paymentMethod,
     value,
-    cardBin: card?.bin,              // First 6 digits only — safe
-    cardNumberLength: card?.numberLength,  // Safe
+    cardBin: card?.bin, // First 6 digits only — safe
+    cardNumberLength: card?.numberLength, // Safe
   });
 
   // NEVER log the full request body for payment requests
   // It contains card tokens or raw card data
 }
 
-function redactSensitiveFields(body: Record<string, unknown>): Record<string, unknown> {
+function redactSensitiveFields(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
   const redacted = { ...body };
   if (redacted.card && typeof redacted.card === "object") {
     const card = redacted.card as Record<string, unknown>;
@@ -7540,8 +7956,12 @@ function redactSensitiveFields(body: Record<string, unknown>): Record<string, un
 ```
 
 **Wrong**
+
 ```typescript
-async function createPaymentHandler(req: Request, res: Response): Promise<void> {
+async function createPaymentHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   // CRITICAL PCI VIOLATION: Logging the entire request body
   // This includes card number, CVV, holder name, and/or token values
   console.log("Payment request received:", JSON.stringify(req.body));
@@ -7586,18 +8006,18 @@ interface CreatePaymentRequest {
   currency: string;
   paymentMethod: string;
   card?: {
-    holder?: string;        // Raw (PCI) or absent (Secure Proxy)
-    holderToken?: string;   // Token (Secure Proxy only)
-    number?: string;        // Raw (PCI) or absent (Secure Proxy)
-    numberToken?: string;   // Token (Secure Proxy only)
-    bin: string;            // Always present — first 6 digits
-    numberLength: number;   // Always present
-    csc?: string;           // Raw (PCI) or absent (Secure Proxy)
-    cscToken?: string;      // Token (Secure Proxy only)
+    holder?: string; // Raw (PCI) or absent (Secure Proxy)
+    holderToken?: string; // Token (Secure Proxy only)
+    number?: string; // Raw (PCI) or absent (Secure Proxy)
+    numberToken?: string; // Token (Secure Proxy only)
+    bin: string; // Always present — first 6 digits
+    numberLength: number; // Always present
+    csc?: string; // Raw (PCI) or absent (Secure Proxy)
+    cscToken?: string; // Token (Secure Proxy only)
     expiration: { month: string; year: string };
   };
-  secureProxyUrl?: string;          // Present when Secure Proxy is active
-  secureProxyTokensURL?: string;    // For custom token operations
+  secureProxyUrl?: string; // Present when Secure Proxy is active
+  secureProxyTokensURL?: string; // For custom token operations
   callbackUrl: string;
   miniCart: Record<string, unknown>;
 }
@@ -7632,12 +8052,12 @@ Call acquirer through Secure Proxy with proper headers:
 ```typescript
 async function callAcquirerViaProxy(
   secureProxyUrl: string,
-  acquirerRequest: object
+  acquirerRequest: object,
 ): Promise<AcquirerResponse> {
   const response = await fetch(secureProxyUrl, {
     method: "POST",
     headers: {
-      "Accept": "application/json",
+      Accept: "application/json",
       "Content-Type": "application/json",
       // X-PROVIDER-Forward-To tells the proxy where to send the request
       "X-PROVIDER-Forward-To": process.env.ACQUIRER_API_URL!,
@@ -7650,21 +8070,25 @@ async function callAcquirerViaProxy(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Secure Proxy call failed: ${response.status} ${errorText}`);
+    throw new Error(
+      `Secure Proxy call failed: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json() as Promise<AcquirerResponse>;
 }
 
 // For PCI-certified environments, call acquirer directly
-async function callAcquirerDirect(acquirerRequest: object): Promise<AcquirerResponse> {
+async function callAcquirerDirect(
+  acquirerRequest: object,
+): Promise<AcquirerResponse> {
   const response = await fetch(process.env.ACQUIRER_API_URL!, {
     method: "POST",
     headers: {
-      "Accept": "application/json",
+      Accept: "application/json",
       "Content-Type": "application/json",
-      "MerchantId": process.env.ACQUIRER_MERCHANT_ID!,
-      "MerchantKey": process.env.ACQUIRER_MERCHANT_KEY!,
+      MerchantId: process.env.ACQUIRER_MERCHANT_ID!,
+      MerchantKey: process.env.ACQUIRER_MERCHANT_KEY!,
     },
     body: JSON.stringify(acquirerRequest),
   });
@@ -9698,6 +10122,41 @@ If you see uppercase characters, underscores, non-semver versions, or vendor/nam
 
 This identity is not safely publishable because the name is not kebab-case and the version is not valid semver.
 
+### Constraint: Major version bumps on content-holding apps invalidate stored content
+
+If the app ships any of `store/blocks.json`, `store/routes.json`, `store/templates/`, or `store/contentSchemas.json` (i.e. it is a **content-holding app** in the Store Framework sense), the `version` field MUST be treated as merchant-facing. A `vtex release major` on this app changes the key prefix that `vtex.pages-graphql` uses to look up every Site Editor edit, every custom route, and every per-template render cache.
+
+**Why this matters**
+
+`vtex.pages-graphql` keys merchant content by `vendor.app@MAJOR.x:template`. A patch and a minor bump preserve the key. A major bump changes it. After the major bump, none of the previously authored content is visible to the resolver under the active major key, and the storefront falls back to default `vtex.store-theme` content. The official recovery path is the `updateThemeIds` mutation in `vtex.pages-graphql@2.x`, executed in a production-flag dev workspace after installing the new major and before promoting; it rekeys all Site Editor edits, Pages, and Redirects from the old major to the new one.
+
+**Detection**
+
+Before approving `vtex release major` on an app whose manifest declares `"store"` in `builders` (or that ships any file under `store/`), STOP and require an explicit `updateThemeIds` migration plan in a production-flag dev workspace. The same rule applies before installing any new MAJOR of such an app on a production account.
+
+**Correct**
+
+```bash
+# patch and minor preserve content keys; safe for content-holding apps
+vtex release patch
+vtex release minor
+```
+
+**Wrong**
+
+```bash
+# major bump on a content-holding app installed straight to master:
+# every Site Editor edit becomes invisible to the resolver and the
+# storefront falls back to default vtex.store-theme content. The fix
+# is to install the new major in a production-flag dev workspace and
+# run updateThemeIds in vtex.pages-graphql@2.x before promote.
+vtex release major
+vtex publish
+vtex install acme.store-theme@5.0.0
+```
+
+See `vtex-io-storefront-theme-versioning` for the safe install, `updateThemeIds` migration, smoke-test, promote, and rollback flow for content-holding apps.
+
 ### Constraint: Dependencies and peerDependencies must express installation intent correctly
 
 Use `dependencies` only for apps that this app should install as part of its contract and that can be auto-installed safely. Use `peerDependencies` for apps that must already be present in the environment, should remain externally managed, or declare `billingOptions`.
@@ -9803,6 +10262,12 @@ Use this split when the backend/API contract and the storefront contract have di
 - [ ] Are `dependencies` and `peerDependencies` separated by installation intent?
 - [ ] Would splitting the contract into two apps reduce unrelated concerns or release coupling?
 - [ ] Are runtime, route, GraphQL implementation, frontend, and security details kept out of this skill?
+- [ ] If the app ships any file under `store/`, has the merchant-facing impact of any planned major version bump been reviewed?
+
+## Related skills
+
+- [`vtex-io-storefront-theme-versioning`](../vtex-io-storefront-theme-versioning/skill.md) — Use when the app declares the `store` builder and a version change must preserve or migrate Site Editor content.
+- [`vtex-io-storefront-theme-app`](../vtex-io-storefront-theme-app/skill.md) — Use when the question is what the theme app's `store/` files should own.
 
 ## Reference
 
@@ -14020,7 +14485,7 @@ Do not use this skill for:
 - Each exported component MUST have a root-level file in `/react` that re-exports it. The builder resolves `"component": "ProductReviews"` to `react/ProductReviews.tsx`.
 - For **storefront** components, use `vtex.css-handles` for styling (not inline styles, not global CSS).
 - For **admin** components, use `vtex.styleguide` — the official VTEX Admin component library. No third-party UI libraries.
-- Use `contentSchemas.json` in `/store` to make component props editable in Site Editor (JSON Schema format).
+- Use `contentSchemas.json` in `/store` to make component props editable in Site Editor (JSON Schema format). Merchant edits are stored by `vtex.pages-graphql` under a key that includes the **declaring app's MAJOR version** (`vendor.app@MAJOR.x:template`). A major version bump on the declaring app makes those edits invisible to the resolver until they are migrated to the new major with the `updateThemeIds` mutation in `vtex.pages-graphql@2.x` — see `vtex-io-storefront-theme-versioning`.
 - Use `react-intl` and the `messages` builder for i18n — never hardcode user-facing strings.
 - Fetch data via GraphQL queries (`useQuery` from `react-apollo`), never via direct API calls from the browser.
 
@@ -14403,6 +14868,7 @@ Using the component in a Store Framework theme:
 - **Directly calling APIs from React components**: Using `fetch()` or `axios` exposes authentication tokens to the client and bypasses CORS restrictions. Use GraphQL queries that resolve server-side via `useQuery` from `react-apollo`.
 - **Hardcoded strings without i18n**: Components with hardcoded strings only work in one language. Use the `messages` builder and `react-intl` for internationalization.
 - **Missing root-level export file**: If `interfaces.json` references `"component": "ProductReviews"` but `react/ProductReviews.tsx` doesn't exist, the block silently fails to render.
+- **Major version bump on a content-holding component app**: A `vtex release major` on an app that ships `store/contentSchemas.json` makes every Site Editor edit ever saved against blocks declared by that app invisible to the resolver until it is migrated to the new major with the `updateThemeIds` mutation in `vtex.pages-graphql@2.x`. Use a `patch` or `minor` whenever possible, and follow `vtex-io-storefront-theme-versioning` when a major is unavoidable.
 
 ## Review checklist
 
@@ -14413,6 +14879,12 @@ Using the component in a Store Framework theme:
 - [ ] Is data fetched via GraphQL (`useQuery`), not direct API calls?
 - [ ] Are user-facing strings using `react-intl` and the `messages` builder?
 - [ ] Is `contentSchemas.json` defined for Site Editor-editable props?
+- [ ] If the app ships `store/contentSchemas.json`, has the merchant-facing impact of any planned major version bump been reviewed?
+
+## Related skills
+
+- [`vtex-io-storefront-theme-versioning`](../vtex-io-storefront-theme-versioning/skill.md) — Use when the app ships `store/contentSchemas.json` and a version change must preserve or migrate Site Editor content.
+- [`vtex-io-storefront-theme-app`](../vtex-io-storefront-theme-app/skill.md) — Use when the question is how a consumer theme composes these blocks into pages.
 
 ## Reference
 
@@ -14451,6 +14923,8 @@ Do not use this skill for:
 - The `component` field should map to the React entry name under `react/`, such as `ProductReviews`, or a nested path such as `product/ProductReviews` when the app structure is hierarchical.
 - Use `composition` intentionally when the block needs an explicit child model. `children` means the component renders nested blocks through `props.children`, while `blocks` means the block exposes named block slots controlled by Store Framework.
 - `composition` is optional. For many simple blocks, declaring `component` and, when needed, `allowed` is enough.
+- Block IDs are scoped by the **declaring app's MAJOR version**. `vtex.pages-graphql` resolves a block reference such as `acme-related-products` against `acme.product-widgets@MAJOR.x:acme-related-products` for the major actually installed in the workspace. A block declared in `0.x` is not the same block as one declared in `5.x`, even if the ID is identical.
+- A consumer theme that references a block ID through `store/blocks.json` only sees the block if the declaring app is installed at a major matching the dependency range. Mismatches surface as `Missing block vendor.app@MAJOR.x:block-id` errors at the resolver and break the page.
 - Use this skill for the render/runtime contract, and use storefront/admin skills for the component implementation itself.
 
 ## Hard constraints
@@ -14514,6 +14988,45 @@ If an interface points to a component name with no corresponding React entry fil
   }
 }
 ```
+
+### Constraint: Block IDs must resolve under the installed major of the declaring app
+
+Block IDs referenced from a theme app's `store/blocks.json` MUST resolve to an `interfaces.json` entry in an installed app whose MAJOR version matches the consumer's dependency range. The render-time resolver is keyed by `vendor.app@MAJOR.x:block-id`, not by the bare block ID.
+
+**Why this matters**
+
+`vtex.pages-graphql` uses the declaring app's major version as part of the block lookup. A block that exists in `acme.product-widgets@0.x` is not visible to a consumer that resolves `acme.product-widgets@5.x`, even if the block ID is identical. Mismatches return `Missing block` errors at the GraphQL layer and the page falls back to default content or fails outright.
+
+**Detection**
+
+If a consumer theme references a block ID and the declaring app's installed major does not match the consumer's dependency range, STOP and align the dependency range or move the block declaration to the correct major.
+
+**Correct**
+
+```json
+// consumer theme manifest.json
+{ "dependencies": { "acme.product-widgets": "0.x" } }
+```
+
+```json
+// acme.product-widgets@0.x ships store/interfaces.json with:
+{ "acme-related-products": { "component": "RelatedProducts" } }
+```
+
+```json
+// consumer theme store/blocks.json
+{ "store.product": { "children": ["acme-related-products"] } }
+```
+
+**Wrong**
+
+```json
+// consumer theme depends on acme.product-widgets@0.x
+// but the block "acme-related-products" was added in @5.x and never backported
+{ "store.product": { "children": ["acme-related-products"] } }
+```
+
+The resolver returns `Missing block acme.product-widgets@0.x:acme-related-products`.
 
 ### Constraint: Block composition must be intentional
 
@@ -14594,6 +15107,8 @@ This wiring makes the block name visible in the theme, maps it to a real React e
 - Forgetting to register a storefront component as a block.
 - Mapping block names to missing React entry files.
 - Using the wrong composition model.
+- Adding a new block to a `5.x` line and assuming consumers depending on `0.x` will see it. Block visibility is scoped by the declaring app's installed major.
+- Renaming a block ID without coordinating with consumer themes that already reference it; the rename is effectively a breaking change for stored content.
 
 ## Review checklist
 
@@ -14601,10 +15116,17 @@ This wiring makes the block name visible in the theme, maps it to a real React e
 - [ ] Does the component mapping resolve correctly?
 - [ ] Are composition and allowed children intentional?
 - [ ] Is runtime registration clearly separated from component internals?
+- [ ] Is the declaring app installed at a major that matches every consumer's dependency range?
+
+## Related skills
+
+- [`vtex-io-storefront-theme-app`](../vtex-io-storefront-theme-app/skill.md) — Use when the question is how a consumer theme composes these blocks into pages and routes.
+- [`vtex-io-storefront-theme-versioning`](../vtex-io-storefront-theme-versioning/skill.md) — Use when the question is how a major version change in a block-declaring app affects merchants who already reference those blocks in stored content.
 
 ## Reference
 
 - [Store Framework](https://developers.vtex.com/docs/guides/vtex-io-documentation-store-framework) - Block and theme context
+- [Interfaces](https://developers.vtex.com/docs/guides/vtex-io-documentation-interface) — How `interfaces.json` maps block IDs to React components and how block IDs are namespaced by app major.
 
 ---
 
@@ -16618,3 +17140,695 @@ export function MyComponent() {
 
 - [Store Framework](https://developers.vtex.com/docs/guides/vtex-io-documentation-store-framework) - Storefront app context, data, and hooks
 - [CSS Handles](https://developers.vtex.com/docs/guides/css-handles) - Styling contract for VTEX IO storefront components
+
+---
+
+# Storefront Theme App
+
+## When this skill applies
+
+Use this skill when working on the app that assembles the storefront — the theme app that owns the page tree, custom routes, and Site Editor surface area for a store.
+
+- Scaffolding `vendor.store-theme` or any app with the `store` builder that ships pages
+- Adding or changing `store/blocks.json` or per-template files under `store/blocks/`
+- Adding or modifying a custom route in `store/routes.json`
+- Composing the block tree for `store.home`, `store.product`, `store.search`, `store.custom`, or any native page template
+- Extending or overriding a base theme such as `vtex.store-theme`
+- Reviewing whether a change belongs in the theme app, in a component app, or in app settings
+
+Do not use this skill for:
+
+- registering a new block in a component app (`store/interfaces.json`) — use `vtex-io-render-runtime-and-blocks`
+- implementing the React component behind a block — use `vtex-io-storefront-react`
+- changing the theme app's installed version on `master` — use `vtex-io-storefront-theme-versioning`
+- localized strings — use `vtex-io-messages-and-i18n`
+
+## Decision rules
+
+- A theme app is a regular VTEX IO app with the `store` builder declared in `manifest.json`. It almost never ships React code; it composes blocks declared by component apps and by base themes.
+- The theme app declares its base theme in `manifest.json#dependencies`, typically `vtex.store-theme`, and inherits every page template, block declaration, and default content the base ships.
+- `store/blocks.json` (or per-template files under `store/blocks/`) defines the **block tree per page template** by referencing block IDs. Block IDs come from the component apps' `store/interfaces.json` and are scoped by the declaring app's MAJOR version.
+- `store/routes.json` defines **custom storefront routes** and binds them to a page context (`store.custom`, `store.product`, `store.search`, etc.). Native routes (`/`, `/{slug}/p`, search) come from the base theme and rarely need to be redeclared.
+- `store/contentSchemas.json` declares **Site Editor-editable props** for blocks. Merchant edits to those props are stored by `vtex.pages-graphql` under a key that includes the theme app's MAJOR version.
+- Three change locations exist for storefront behavior. Pick consciously:
+  1. Theme app `store/` JSON — composition, routes, default content, allowed children. Affects all shoppers immediately on promote.
+  2. Component app code — the React behavior of a block. Released on the component app's own version cadence.
+  3. Site Editor — merchant-managed content overrides on top of the theme's defaults. Stored by `vtex.pages-graphql` and scoped by the declaring app's installed major.
+- Prefer extending a base theme over forking it. Forking a base theme moves the responsibility for every block, route, and template to your app forever, including upstream bug fixes.
+- A storefront page is a tree of blocks. The leaves are component blocks; the branches are container blocks (`flex-layout.row`, `flex-layout.col`, etc.). Keep the tree as shallow as the design allows; deep trees inflate render and content footprint.
+- The theme app is a **content-holding app** in the sense of `vtex-io-storefront-theme-versioning`. Its installed major version is part of the key the platform uses for every Site Editor change a merchant has ever saved against blocks declared by this app. Treat its version contract as merchant-facing, not developer-facing.
+
+## Hard constraints
+
+### Constraint: Theme apps must declare the `store` builder and a base theme
+
+A storefront theme app MUST declare `"store"` in `manifest.json#builders` and MUST depend on a base theme (typically `vtex.store-theme`) unless it explicitly takes ownership of every native page template, block, and route.
+
+**Why this matters**
+
+Without the `store` builder, none of the files under `store/` are processed and the theme contributes nothing to the storefront. Without a base theme, the app is responsible for declaring every native page template (`store.home`, `store.product`, `store.search`, etc.) from scratch — including upstream maintenance forever.
+
+**Detection**
+
+If a theme app ships `store/blocks.json` or `store/routes.json` but its manifest does not declare `"store"` in `builders`, STOP and add the builder. If the manifest also omits `vtex.store-theme` (or another base theme) from `dependencies` or `peerDependencies` without an explicit reason, STOP and confirm the app intends to own every native template.
+
+**Correct**
+
+```json
+{
+  "vendor": "acme",
+  "name": "store-theme",
+  "version": "1.0.0",
+  "title": "ACME Store Theme",
+  "builders": {
+    "store": "0.x",
+    "messages": "1.x"
+  },
+  "dependencies": {
+    "vtex.store-theme": "2.x",
+    "acme.product-widgets": "0.x"
+  }
+}
+```
+
+**Wrong**
+
+```json
+{
+  "vendor": "acme",
+  "name": "store-theme",
+  "version": "1.0.0",
+  "builders": {
+    "messages": "1.x"
+  },
+  "dependencies": {}
+}
+```
+
+The `store/` files exist on disk but the platform ignores them, and the theme inherits nothing.
+
+### Constraint: Block IDs in `store/blocks.json` must resolve to a registered block in an installed app
+
+Every block ID referenced in `store/blocks.json` (or per-template files) MUST be declared in an `interfaces.json` of an installed app whose MAJOR version matches what the platform resolves at render time. Unresolved block IDs cause `Missing block` errors at the GraphQL layer and break the page.
+
+**Why this matters**
+
+`vtex.pages-graphql` resolves a block ID by looking up `vendor.app@MAJOR.x:block-id` against the installed apps. If the declaring app is not installed, or is installed at a different major than the merchant content was authored against, the block does not exist from the resolver's point of view and the page fails to render.
+
+**Detection**
+
+If `store/blocks.json` references a block ID, verify that some app in `manifest.json#dependencies` declares it in `store/interfaces.json` at the major version range listed in the dependency. If the dependency is `acme.product-widgets@0.x`, the block must exist in the `0.x` line of that app, not the `5.x` line.
+
+**Correct**
+
+```json
+// manifest.json
+{
+  "dependencies": {
+    "vtex.store-theme": "2.x",
+    "acme.product-widgets": "0.x"
+  }
+}
+```
+
+```json
+// store/blocks.json
+{
+  "store.product": {
+    "children": [
+      "flex-layout.row#product-main",
+      "acme-related-products"
+    ]
+  },
+  "acme-related-products": {
+    "props": { "limit": 8 }
+  }
+}
+```
+
+```json
+// acme.product-widgets@0.x ships store/interfaces.json with:
+{
+  "acme-related-products": {
+    "component": "RelatedProducts"
+  }
+}
+```
+
+**Wrong**
+
+```json
+// manifest.json depends on acme.product-widgets@0.x
+// but store/blocks.json references a block that only exists in @5.x
+{
+  "store.product": {
+    "children": ["acme-new-related-products"]
+  }
+}
+```
+
+The render-time resolver returns `Missing block acme.product-widgets@0.x:acme-new-related-products` and the page fails.
+
+### Constraint: Custom routes in `store/routes.json` must bind to a real page context and template
+
+Every entry in `store/routes.json` MUST set a valid `path`, a `context` (or rely on the built-in context for native page IDs such as `store.product`), and a template that exists in the block tree (the page ID itself, or a `store.custom#<id>` declared in `store/blocks.json`).
+
+**Why this matters**
+
+A route entry without a resolvable template renders nothing. A route entry with the wrong context (e.g., a custom institutional page typed as `store.product`) executes the wrong data resolver and crashes or returns empty product data.
+
+**Detection**
+
+For each route in `store/routes.json`, confirm: (a) the `path` does not collide with native VTEX paths, (b) the bound page ID exists as a key in `store/blocks.json`, and (c) the `context` matches the data the page actually needs.
+
+**Correct**
+
+```json
+// store/routes.json
+{
+  "store.custom#about": {
+    "path": "/institucional/sobre",
+    "context": "vtex.store-resources/InstitutionalPageContext"
+  }
+}
+```
+
+```json
+// store/blocks.json
+{
+  "store.custom#about": {
+    "blocks": ["rich-text#about-body"]
+  }
+}
+```
+
+**Wrong**
+
+```json
+// store/routes.json
+{
+  "store.custom#about": {
+    "path": "/p/sobre"
+  }
+}
+```
+
+Path `/p/sobre` collides with the native PDP route shape, no `context` is declared, and there is no matching `store.custom#about` template in `store/blocks.json`.
+
+## Preferred pattern
+
+Recommended theme app structure:
+
+```text
+acme.store-theme/
+├── manifest.json                     # store builder, base theme dependency
+├── messages/                         # localized strings (separate skill)
+└── store/
+    ├── blocks.json                   # global block declarations
+    ├── routes.json                   # custom routes
+    ├── contentSchemas.json           # Site Editor-editable props
+    └── blocks/                       # per-template block trees
+        ├── home.jsonc
+        ├── product.jsonc
+        ├── search.jsonc
+        ├── category.jsonc
+        └── custom/
+            ├── about.jsonc
+            └── stores.jsonc
+```
+
+Recommended `store.home` composition:
+
+```json
+{
+  "store.home": {
+    "blocks": [
+      "flex-layout.row#home-hero",
+      "shelf#home-best-sellers",
+      "rich-text#home-newsletter"
+    ]
+  },
+  "flex-layout.row#home-hero": {
+    "children": ["image#hero-banner"]
+  },
+  "image#hero-banner": {
+    "props": {
+      "src": "/arquivos/home-hero.png",
+      "alt": "Promotional banner"
+    }
+  }
+}
+```
+
+Recommended custom institutional route:
+
+```json
+// store/routes.json
+{
+  "store.custom#about": {
+    "path": "/institucional/sobre",
+    "context": "vtex.store-resources/InstitutionalPageContext"
+  }
+}
+```
+
+```json
+// store/blocks/custom/about.jsonc
+{
+  "store.custom#about": {
+    "blocks": ["flex-layout.row#about-body"]
+  },
+  "flex-layout.row#about-body": {
+    "children": ["rich-text#about-copy"]
+  },
+  "rich-text#about-copy": {
+    "props": {
+      "text": "About ACME — see Site Editor for the live copy."
+    }
+  }
+}
+```
+
+Recommended Site Editor-editable surface:
+
+```json
+// store/contentSchemas.json
+{
+  "rich-text#about-copy": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "title": "Body copy",
+        "widget": { "ui:widget": "textarea" }
+      }
+    }
+  }
+}
+```
+
+Merchant edits to `text` are persisted by `vtex.pages-graphql` under a key that includes the theme app's MAJOR version. See `vtex-io-storefront-theme-versioning` for what happens to that content on a major bump and how to migrate it with the `updateThemeIds` mutation.
+
+## Common failure modes
+
+- Forking `vtex.store-theme` instead of depending on it, then losing every upstream block fix and route addition forever.
+- Referencing a block ID in `store/blocks.json` that exists in a different major of the declaring app than the dependency range allows.
+- Declaring the same block ID in two different apps and getting non-deterministic resolution at render time.
+- Putting Site Editor-editable copy directly in `store/blocks.json` `props` without `contentSchemas.json`, so merchants cannot change it.
+- Adding a custom route to `store/routes.json` without adding the matching `store.custom#<id>` template in `store/blocks.json`.
+- Treating the theme app's version as developer-facing and bumping the major to "tidy up", which leaves the new major with no merchant content and forces an `updateThemeIds` migration in `vtex.pages-graphql@2.x` before promote (see `vtex-io-storefront-theme-versioning`).
+- Putting React component code in the theme app instead of in a dedicated component app, which mixes block declaration with block consumption and complicates reuse.
+- Storing operational or shopper-specific data in theme `store/` files. The theme is global; per-shopper or per-segment data belongs elsewhere.
+
+## Review checklist
+
+- [ ] Does `manifest.json` declare the `store` builder?
+- [ ] Does the theme depend on a base theme, or is full ownership of native templates explicit and intentional?
+- [ ] Does every block ID in `store/blocks.json` resolve to a real `interfaces.json` entry in an installed app at a matching major?
+- [ ] Does every entry in `store/routes.json` have a valid `path`, `context`, and matching template in `store/blocks.json`?
+- [ ] Are merchant-editable copy and image fields exposed through `contentSchemas.json` rather than hardcoded in `props`?
+- [ ] Are React components kept out of the theme app and in dedicated component apps?
+- [ ] Has the team considered whether a planned change would force a major version bump on this content-holding app?
+
+## Related skills
+
+- [`vtex-io-storefront-theme-versioning`](../vtex-io-storefront-theme-versioning/skill.md) — Use when the question is how to safely change which version of this theme app is installed on `master`.
+- [`vtex-io-render-runtime-and-blocks`](../vtex-io-render-runtime-and-blocks/skill.md) — Use when the question is how a block ID becomes a React component, or how a component app should declare blocks for themes to consume.
+- [`vtex-io-storefront-react`](../vtex-io-storefront-react/skill.md) — Use when the question is the React implementation of a block, not its composition into pages.
+- [`vtex-io-app-contract`](../vtex-io-app-contract/skill.md) — Use when the question is what the theme app's manifest contract should declare and how it interacts with base themes and component apps.
+
+## Reference
+
+- [Store Framework](https://developers.vtex.com/docs/guides/vtex-io-documentation-store-framework) — How theme apps assemble pages from blocks and templates.
+- [Using Components](https://developers.vtex.com/docs/guides/store-framework-using-components) — How to reference blocks from base themes and component apps.
+- [Themes](https://developers.vtex.com/docs/guides/vtex-io-documentation-themes) — Theme app structure and the relationship to `vtex.store-theme`.
+- [Routes](https://developers.vtex.com/docs/guides/vtex-io-documentation-routes) — Declaring custom storefront routes and binding them to page contexts.
+- [Making a Custom Component Available in Site Editor](https://developers.vtex.com/docs/guides/vtex-io-documentation-making-a-custom-component-available-in-site-editor) — `contentSchemas.json` and the Site Editor surface.
+
+---
+
+# Storefront Theme Versioning, Install, and Rollback
+
+## When this skill applies
+
+Use this skill whenever the version of a content-holding storefront app (a theme such as `vendor.store-theme`, or any app that ships `store/blocks.json`, `store/routes.json`, `store/templates/`, or `store/contentSchemas.json`) is about to change in `master`.
+
+- Bumping the version of a theme app with `vtex release patch | minor | major`
+- Running `vtex publish` / `vtex deploy` on a theme app
+- Running `vtex install vendor.store-theme@X.Y.Z` against a production account
+- Promoting a workspace that has a different theme version installed than `master`
+- Planning recovery from a deploy that "lost" all storefront content
+- Reviewing a developer's deploy script that touches a storefront theme
+
+Do not use this skill for:
+
+- block registration via `interfaces.json` — use `vtex-io-render-runtime-and-blocks`
+- shopper-facing component code under `react/` — use `vtex-io-storefront-react`
+- app-level settings under `manifest.json#settingsSchema` — use `vtex-io-app-settings`
+- Master Data schema versioning — use `vtex-io-masterdata-strategy`
+
+## Decision rules
+
+- Treat any app that ships content under `store/` (theme apps and many storefront apps) as a **content-holding app**. Its installed MAJOR version is part of the key the platform uses to store and look up every Site Editor change a merchant has ever saved against blocks declared by that app.
+- Site Editor content, custom routes, templates, and per-template render caches are stored by `vtex.pages-graphql` under keys of the form `vendor.app@MAJOR.x:template`. Examples: `acme.store-theme@0.x:store.home`, `acme.store-theme@0.x:store.product`.
+- A `patch` (`0.0.61` → `0.0.62`) and a `minor` (`0.1.0` → `0.2.0`) reuse the same key and the new version sees the same merchant content. A `major` (`0.x` → `5.x`) changes the key. The new major starts with **zero merchant content** even if the theme code is otherwise identical.
+- When `vtex.pages-graphql` cannot find content for the active major, it falls back to the default `vtex.store-theme` content. The site visibly degrades to "VTEX default theme" content even though the customer's app is installed and rendering.
+- Avoid `vtex release major` on a content-holding app whenever possible. Prefer keeping changes within the current major as `patch` or `minor` so merchant content carries forward automatically.
+- When a major bump is unavoidable because of a structural change to blocks, routes, or templates, **migrate the merchant content from the old major to the new major** with the `updateThemeIds` mutation in `vtex.pages-graphql@2.x` before promoting. The mutation rekeys all Site Editor edits, Pages, and Redirects from `vendor.app@{oldMajor}.x` to `vendor.app@{newMajor}.x` in one operation. This is the official developer-accessible recovery surface; do not assume content has to be re-authored manually.
+- Always install and validate a new theme major in a **production-flag dev workspace** (`vtex use rollout-workspace --production`, which both creates and switches to the workspace in one step) before promoting. Linking is not enough: `vtex link` does not exercise published artifacts and does not produce the same content-key behavior as `vtex install` + `vtex workspace promote`.
+- Run `updateThemeIds` against `vtex.pages-graphql@2.x` from the GraphQL Admin IDE (`vtex install vtex.admin-graphql-ide@3.x`, then `vtex browse admin/graphql-ide`) inside the production-flag dev workspace, after `vtex install` of the new major and before `vtex workspace promote`. Site Editor, Pages, and Redirects in that workspace will then resolve under the new major and be carried with the workspace at promote time.
+- Treat `vtex workspace promote` as the atomic cutover. Smoke-test the dev workspace's full page set (home, PDP, PLP, department, search, custom routes, account, checkout entry) after running `updateThemeIds`. If the dev workspace is broken, master will be broken.
+- Verify that the version published to the Apps Registry matches the source you expect. A common failure pattern is publishing a stripped-down boilerplate by mistake — the registry version installs cleanly, but it does not contain the custom blocks the existing Site Editor content references. `updateThemeIds` cannot fix a missing-block problem; it only rekeys existing content.
+- The same `updateThemeIds` step is required when **downgrading** to a previous major (for example `5.x` → `4.x`). The mutation moves content in either direction across MAJOR boundaries.
+- `vtex workspace promote` does **not** wipe master's `vtex.pages-graphql` VBase content. The service merges with `MineWinsConflictsResolver`: a 3-way merge of `base` (the master state the dev workspace forked from), `master` (current master), and `mine` (the dev workspace). Master keys not touched by the dev workspace are preserved; conflicting keys are resolved in favor of the dev workspace ("mine wins"). Plan the rollout so that conflicting writes to master during the rollout window are minimized — for example, by pausing merchant Site Editor edits in master while the dev workspace is being prepared.
+- Whenever `MineWinsConflictsResolver` resolves a conflict in production, `vtex.pages-graphql` automatically writes a per-minute snapshot of `base`, `master`, and `mine` to a sibling `userData_backup` VBase bucket. This is logged with `subject: "conflicts_resolution"` in the `io_vtex_logs` index. The snapshot is the recovery source if a promote merges in something unwanted; it is **not** a substitute for the smoke-test step (no backup is written when there is no conflict to resolve). Treat the backup as a safety net for VTEX support escalations, not a routine self-service restore.
+
+## Hard constraints
+
+### Constraint: Major version bumps on content-holding apps require an `updateThemeIds` migration before promote
+
+A `vtex release major` (or any version change that crosses the `MAJOR.x` boundary) on an app that owns Store Framework content MUST NOT be promoted to `master` without first migrating merchant content from the old major to the new major in a production-flag dev workspace, using the `updateThemeIds` mutation in `vtex.pages-graphql@2.x`. The new major starts empty from `vtex.pages-graphql`'s point of view; promoting it to `master` without running `updateThemeIds` makes the storefront fall back to default theme content for every page that depended on Site Editor edits.
+
+**Why this matters**
+
+`vtex.pages-graphql` keys every merchant-owned route, template, Site Editor edit, and Page/Redirect entry by `vendor.app@MAJOR.x:template`. A patch and minor bump preserve the key; a major bump invalidates it. After a major bump, every Site Editor change the merchant ever saved is no longer visible to the resolver under the new major, and the storefront falls back to default `vtex.store-theme` content. The official developer-accessible fix is the `updateThemeIds` mutation, which rekeys all Site Editor edits, Pages, and Redirects from the old major to the new one in a single operation. Skipping it (or assuming developers must re-author content manually) leaves the storefront degraded for shoppers.
+
+**Detection**
+
+Before running any `vtex install vendor.app@X.Y.Z` on a production account, compare `X` to the major currently installed (`vtex ls --production | grep store-theme`). If `X` differs, STOP. Require the `updateThemeIds` migration to be executed in a production-flag dev workspace, after the new major is installed and before promote.
+
+Also STOP if a developer is about to run `vtex release major` on an app that ships any of: `store/blocks.json`, `store/routes.json`, `store/templates/`, `store/contentSchemas.json`. Confirm the structural change cannot be modeled as a `patch` or `minor` first; if the major is unavoidable, plan the `updateThemeIds` step explicitly.
+
+**Correct**
+
+```bash
+vtex use theme-rollout --production            # creates and switches to a production-flag dev workspace
+vtex install acme.store-theme@5.0.0
+vtex install vtex.admin-graphql-ide@3.x        # required to access the GraphQL IDE
+vtex browse admin/graphql-ide
+# In the IDE, select the app `vtex.pages-graphql@2.x` from the dropdown and run:
+#
+# mutation {
+#   updateThemeIds(
+#     from: "acme.store-theme@0.x",
+#     to:   "acme.store-theme@5.x"
+#   )
+# }
+#
+# Expected response: { "data": { "updateThemeIds": true } }
+# Validate Site Editor, Pages, and Redirects in this workspace, then:
+vtex workspace promote
+```
+
+**Wrong**
+
+```bash
+vtex release major
+vtex publish
+vtex install acme.store-theme@5.0.0
+# installed straight to master — no merchant content is visible under @5.x
+# and the storefront falls back to default vtex.store-theme content
+```
+
+### Constraint: Never install a content-holding app version directly to master without a dev-workspace smoke test
+
+Any change that swaps the installed version of a content-holding app on `master` MUST go through a production-flag dev workspace first (`vtex use $name --production`), be smoke-tested across the full page set, and then be promoted with `vtex workspace promote`.
+
+**Why this matters**
+
+`master` is the public storefront. Installing a theme directly to `master` makes the new version live for every shopper instantly. If the install reveals a missing block, an empty content surface under the new major, or a stripped-down published artifact, the only recovery is rollback under load. A production-flag dev workspace renders against the same data as `master` and surfaces the same failures without exposing shoppers.
+
+**Detection**
+
+If a developer's command sequence runs `vtex install` while the active workspace is `master`, STOP. Require switching to a production-flag dev workspace first.
+
+**Correct**
+
+```bash
+vtex use theme-rollout-2026-04 --production    # creates and switches to a production-flag dev workspace
+vtex install acme.store-theme@5.3.5
+# if this install crosses a MAJOR boundary, run updateThemeIds before smoke tests.
+# fetch home, PDP, PLP, search, custom routes from $workspace--$account.myvtex.com
+# only after smoke tests pass:
+vtex workspace promote
+```
+
+**Wrong**
+
+```bash
+vtex use master
+vtex install acme.store-theme@5.3.5
+# any failure is now public
+```
+
+### Constraint: Verify the published artifact matches the source you expect
+
+Before installing a new published version of a content-holding app to `master`, confirm that the artifact in the Apps Registry actually contains the blocks the active merchant content references. A successful `vtex publish` does not guarantee the artifact carries the merchant's customizations.
+
+**Why this matters**
+
+A common failure pattern is publishing from a stripped-down repository or from a base-theme fork that lost the custom blocks the merchant has been editing for months. The install succeeds, but `pages-graphql` cannot resolve the blocks referenced in the merchant's stored content, and the storefront falls back to default content. The artifact and the content disagree.
+
+**Detection**
+
+If the published version was built from a repository that does not contain the custom blocks the active theme references, STOP. Republish from the correct source. The `updateThemeIds` migration only rekeys content; it cannot resolve missing block IDs, so a stripped-down artifact will still fall back to default content even after a successful migration.
+
+**Correct**
+
+```bash
+# pull the published artifact and confirm it ships the custom blocks
+vtex apps files acme.store-theme@5.3.5 store/ | grep -E 'umMaisUm|customHeader'
+# matches the block IDs the active theme depends on
+```
+
+**Wrong**
+
+```bash
+vtex publish
+vtex install acme.store-theme@5.3.5
+# published artifact is the boilerplate fork; it is missing every custom block
+# referenced in the merchant's stored content
+```
+
+### Constraint: Treat `vtex workspace promote` as a 3-way mine-wins merge of pages-graphql VBase, not a wipe
+
+`vtex workspace promote` MUST be planned as a merge between the dev workspace and master, not as a destructive replacement of master's `vtex.pages-graphql` VBase content. The service uses `MineWinsConflictsResolver` from `@vtex/api`: it diffs `base` (the master state the dev workspace forked from), `master` (current master), and `mine` (the dev workspace), and resolves conflicts in favor of the dev workspace.
+
+**Why this matters**
+
+Master keys that the dev workspace never touched are preserved on promote. Conflicting keys (something edited in both master and the dev workspace after the fork point) are overwritten by the dev workspace's value. Two practical consequences for a theme rollout:
+
+1. If merchants continue to edit Site Editor in master while the dev workspace is being prepared, those edits to keys the dev workspace also touches will be lost on promote.
+2. After `updateThemeIds` runs in the dev workspace, the dev workspace owns the new-major content map; promoting it cleanly transfers the rekeyed Site Editor edits, Pages, and Redirects into master via mine-wins.
+
+In production, every conflict resolution writes a per-minute snapshot of `base`, `master`, and `mine` to the sibling `userData_backup` VBase bucket inside `vtex.pages-graphql`, logged with `subject: "conflicts_resolution"`. No backup is written when there is no conflict to resolve, so smoke-testing remains the primary safety net.
+
+**Detection**
+
+If a rollout plan assumes promote will "replace" master content, STOP and rephrase as a merge plan: which keys does the dev workspace touch, which keys is master likely to touch in the same window, and how will conflicts be reconciled. If merchants are actively editing Site Editor in master during the rollout window, STOP and either pause those edits, narrow the rollout window, or document which keys will be overwritten.
+
+**Correct**
+
+```text
+Coordinate the rollout window with the merchant ops team:
+- Pause Site Editor edits on master from the moment `updateThemeIds`
+  runs in the dev workspace until `vtex workspace promote` completes.
+- Smoke-test in the dev workspace, then promote.
+- After promote, validate Storefront → Site Editor, Pages, Redirects
+  on master.
+
+If a conflict-resolution log appears (subject: "conflicts_resolution"),
+record the backup paths surfaced by pages-graphql in `io_vtex_logs`.
+The snapshot lives in the `userData_backup` bucket of vtex.pages-graphql
+and can be fetched via the VBase v2 API for support escalation.
+```
+
+**Wrong**
+
+```text
+"Promote will replace master, so we don't need to coordinate."
+- Merchants keep editing Site Editor in master during the rollout.
+- Promote merges those edits with mine-wins; every conflicting key is
+  silently overwritten by the dev workspace value.
+- Without a smoke-test or coordination, the lost edits are not noticed
+  until shoppers report missing content.
+```
+
+## Preferred pattern
+
+Recommended deploy flow for any change to a content-holding app installed on `master`:
+
+```text
+1. Decide the SemVer bump deliberately
+   - patch  → bug fix, no block contract change
+   - minor  → new optional block, backward-compatible additions
+   - major  → ANY structural change that breaks an existing block contract
+              (avoid when possible; requires the updateThemeIds migration)
+
+2. vtex release [patch|minor|major]
+   vtex publish
+
+3. Switch to a production-flag dev workspace
+   (vtex use both creates and switches in one step)
+   vtex use theme-rollout-YYYY-MM-DD --production
+
+4. Install the new version in the dev workspace
+   vtex install vendor.app@X.Y.Z
+
+5. If the bump crosses a MAJOR boundary (including downgrades such as 5.x → 4.x):
+   a. vtex install vtex.admin-graphql-ide@3.x   (if not already installed)
+   b. vtex browse admin/graphql-ide
+   c. In the IDE, select the app `vtex.pages-graphql@2.x` from the dropdown
+   d. Run:
+        mutation {
+          updateThemeIds(
+            from: "{appVendor}.{appName}@{oldMajor}.x",
+            to:   "{appVendor}.{appName}@{newMajor}.x"
+          )
+        }
+      Keep the literal "x" in both keys; do not replace it with a minor or
+      patch number or the mutation silently fails.
+   e. Expected response: { "data": { "updateThemeIds": true } }
+   If the bump is patch or minor inside the same major, skip this step —
+   content keys are preserved automatically.
+
+6. Smoke-test in the dev workspace against the full page set
+   - $workspace--$account.myvtex.com/             (home)
+   - $workspace--$account.myvtex.com/<pdp-slug>/p (product)
+   - $workspace--$account.myvtex.com/<category>   (PLP)
+   - $workspace--$account.myvtex.com/<dept>       (department)
+   - $workspace--$account.myvtex.com/<search>?_q  (search)
+   - any /institucional/* or other custom routes
+   - VTEX Admin → Storefront → Site Editor, Pages, Redirects
+   - account, login, cart, checkout entry
+
+7. If anything is wrong: stop. Do not promote. Investigate.
+   If everything renders correctly:
+   - Coordinate the promote window with the merchant ops team so that
+     no Site Editor edits land on master between `updateThemeIds` in
+     the dev workspace and `vtex workspace promote`. Promote performs
+     a 3-way mine-wins merge against pages-graphql VBase, so any
+     conflicting master edit will be overwritten by the dev workspace.
+   - vtex workspace promote
+
+8. Re-test on $account.myvtex.com (master) and the public domain.
+   - Validate Storefront → Site Editor, Pages, Redirects on master.
+   - If the public CDN serves stale content, validate with cache-busting
+     query strings; the edge will refresh on its normal TTL.
+   - If `io_vtex_logs` shows a `subject: "conflicts_resolution"` entry
+     for `vtex.pages-graphql` in this account around the promote time,
+     record the listed backup paths. They live in the `userData_backup`
+     bucket of pages-graphql and can be fetched via the VBase v2 API
+     if a recovery is needed later.
+
+9. Keep the dev workspace for at least one business day in case a fast
+   re-promote is needed.
+```
+
+Recommended emergency rollback after a broken major install on `master`:
+
+```text
+1. vtex use rollback-YYYY-MM-DD --production
+   (vtex use both creates and switches; there is no `vtex workspace create`)
+2. vtex install vendor.store-theme@<previous major version>
+3. If the rollback crosses a MAJOR boundary (it almost always does), run
+   updateThemeIds in vtex.pages-graphql@2.x to migrate stored Site Editor
+   edits, Pages, and Redirects from the broken major back to the previous
+   major:
+
+     mutation {
+       updateThemeIds(
+         from: "{appVendor}.{appName}@{brokenMajor}.x",
+         to:   "{appVendor}.{appName}@{previousMajor}.x"
+       )
+     }
+
+4. Smoke-test the rollback workspace end-to-end (storefront pages and
+   VTEX Admin → Storefront → Site Editor, Pages, Redirects).
+5. vtex workspace promote
+
+If `updateThemeIds` returns false, the GraphQL IDE shows an error, or
+content does not appear after migration, escalate to VTEX support
+before promoting; do not promote a workspace whose Site Editor content
+has not been validated.
+
+If a previous promote merged in something unwanted, before re-promoting
+check `io_vtex_logs` for a `subject: "conflicts_resolution"` entry on
+`vtex.pages-graphql` for this account around the original promote
+time. The entry lists per-minute snapshot paths inside the
+`userData_backup` bucket (`store/templates.{base|master|mine}.<TS>.json`,
+`store/content.{...}.json`, `store/routes.{...}.json`) which can be
+fetched through the VBase v2 API:
+
+   GET https://infra.io.vtex.com/vbase/v2/{account}/{workspace}/
+       buckets/vtex.pages-graphql/userData_backup/files/{path}
+
+This recovery path requires an admin auth token and is documented in
+`vtex/pages-graphql` `TROUBLESHOOTING.md`. Treat it as a support-led
+escalation, not a routine self-service step, and always test the
+restored payload in a non-master workspace first.
+```
+
+Recommended way to think about content-key behavior:
+
+```text
+Patch / minor bump
+   acme.store-theme @ 0.0.61  →  0.0.62
+   storage key prefix unchanged: acme.store-theme@0.x:*
+   merchant content carries over automatically
+
+Major bump
+   acme.store-theme @ 0.0.61  →  5.0.0
+   storage key prefix changes: acme.store-theme@0.x:*  →  acme.store-theme@5.x:*
+   the new major starts empty from the resolver's point of view
+   run updateThemeIds in vtex.pages-graphql@2.x inside the production-flag
+   dev workspace to rekey Site Editor edits, Pages, and Redirects from
+   acme.store-theme@0.x to acme.store-theme@5.x, then promote
+```
+
+## Common failure modes
+
+- Running `vtex release major` on a theme to "clean up" the version number, not realizing it requires the `updateThemeIds` migration before promote.
+- Installing a new theme major directly on `master` because the dev workspace "looked the same".
+- Publishing from a forked repository that does not contain the custom blocks the active theme depends on. `updateThemeIds` rekeys content but cannot resolve missing block IDs.
+- Treating `vtex link` as equivalent to `vtex install` for content-holding apps. `link` does not exercise the published artifact resolution path or the major-keyed content lookup.
+- Running `vtex workspace promote` from a workspace that was never smoke-tested end-to-end.
+- Promoting a major bump without running `updateThemeIds` first, so the storefront goes live with default `vtex.store-theme` content for every page that previously depended on Site Editor edits.
+- Reaching for a non-existent `vtex workspace create` command. The CLI creates a workspace as a side effect of `vtex use {workspaceName} --production`; that single command both creates and switches.
+- Replacing the literal `x` in `updateThemeIds` arguments with a minor or patch number (`acme.store-theme@5.0.0` instead of `acme.store-theme@5.x`). The mutation requires the major-with-x form and silently no-ops otherwise.
+- Running `updateThemeIds` against the wrong app in the GraphQL IDE dropdown. The mutation only exists in `vtex.pages-graphql@2.x`.
+- Trusting the public domain to confirm a fix immediately after promotion. CloudFront serves stale content; use `?utm_source=<value>` or another cache-busting parameter to bypass the edge during validation.
+- Forgetting that downgrades (for example `5.x` → `4.x`) also cross a MAJOR boundary and need their own `updateThemeIds` run before promote.
+- Assuming `vtex workspace promote` wipes master `vtex.pages-graphql` VBase content and re-fills it from the dev workspace. It does not — it 3-way merges with mine-wins, so master keys not touched by the dev workspace survive, and master keys that *are* also touched by the dev workspace get overwritten silently. Coordinate the rollout window with merchant ops to avoid losing concurrent Site Editor edits in master.
+- Treating the `userData_backup` bucket inside `vtex.pages-graphql` as a routine restore endpoint. It is only written when conflicts are resolved (no conflict, no backup), it requires admin-level auth and the VBase v2 API, and it is a support-led TROUBLESHOOTING surface — not a substitute for smoke-testing or for the `updateThemeIds` flow.
+
+## Review checklist
+
+- [ ] Is the proposed version bump correctly classified as patch, minor, or major against SemVer rules?
+- [ ] If the bump crosses a major boundary, is there a documented `updateThemeIds` migration step in the production-flag dev workspace (in either direction, including downgrades)?
+- [ ] Is the install going to a production-flag dev workspace first (`vtex use $name --production`), never directly to `master`?
+- [ ] If the bump is major, has `updateThemeIds` been run against `vtex.pages-graphql@2.x` from the GraphQL Admin IDE, and has the response been `{ "updateThemeIds": true }`?
+- [ ] Has the published artifact been verified to contain the custom blocks the active theme depends on?
+- [ ] Has the dev workspace been smoke-tested across home, PDP, PLP, department, search, custom routes, account, checkout entry, and the Storefront module (Site Editor, Pages, Redirects)?
+- [ ] Has the rollout window been coordinated so that no concurrent Site Editor edits land on master between the dev workspace's `updateThemeIds` and `vtex workspace promote`, given the 3-way mine-wins merge?
+- [ ] After promote, has `io_vtex_logs` been checked for a `subject: "conflicts_resolution"` entry on `vtex.pages-graphql` for this account, and (if present) have the listed `userData_backup` paths been recorded for support escalation?
+- [ ] Is the dev workspace retained for at least one business day after promotion in case a fast re-promote is needed?
+
+## Related skills
+
+- [`vtex-io-app-contract`](../vtex-io-app-contract/skill.md) — When the question is what the manifest contract should declare, and why a major version bump is a contract-breaking change for content-holding apps.
+- [`vtex-io-storefront-theme-app`](../vtex-io-storefront-theme-app/skill.md) — When the question is what a theme app actually owns (`store/blocks.json`, `store/routes.json`, page templates) and how those files relate to merchant Site Editor content.
+- [`vtex-io-render-runtime-and-blocks`](../vtex-io-render-runtime-and-blocks/skill.md) — When the question is how a block name in a theme resolves to a React component, and why missing blocks under the active major cause render failures.
+- [`vtex-io-data-access-patterns`](../vtex-io-data-access-patterns/skill.md) — When the question is whether a piece of data should live behind Site Editor at all, or in app settings, Master Data, or another store.
+
+## Reference
+
+- [Manifest](https://developers.vtex.com/docs/guides/vtex-io-documentation-manifest) — How `vendor`, `name`, and `version` form the app identity used in storefront content keys.
+- [Versioning an App](https://developers.vtex.com/docs/guides/vtex-io-documentation-versioning-an-app) — `vtex release` and the SemVer rules that decide whether a bump preserves or invalidates downstream content keys.
+- [Publishing an App](https://developers.vtex.com/docs/guides/vtex-io-documentation-publishing-an-app) — How `vtex publish` produces the artifact installed by `vtex install`.
+- [Installing an App](https://developers.vtex.com/docs/guides/vtex-io-documentation-installing-an-app) — Workspace scope of `vtex install` and why dev workspaces must be production-flag for realistic testing.
+- [Creating a Production Workspace](https://developers.vtex.com/docs/guides/vtex-io-documentation-creating-a-production-workspace) — `vtex use {workspaceName} --production` is the single command that both creates and switches to a production-flag workspace.
+- [Promoting a Workspace to Master](https://developers.vtex.com/docs/guides/vtex-io-documentation-promoting-a-workspace-to-master) — `vtex workspace promote` as the atomic cutover from a production-flag dev workspace to `master`.
+- [Migrating CMS settings after a major theme update](https://developers.vtex.com/docs/guides/vtex-io-documentation-migrating-cms-settings-after-major-update) — Official procedure for the `updateThemeIds` mutation in `vtex.pages-graphql@2.x`, including the GraphQL IDE setup and the literal `MAJOR.x` argument format.
+- [`vtex/pages-graphql` `TROUBLESHOOTING.md`](https://github.com/vtex/pages-graphql/blob/master/TROUBLESHOOTING.md) — How `MineWinsConflictsResolver` writes per-minute `base`, `master`, and `mine` snapshots into the `userData_backup` bucket of `vtex.pages-graphql` and how to fetch them via the VBase v2 API for support-led recovery (internal VTEX repo).
+- [Store Framework](https://developers.vtex.com/docs/guides/vtex-io-documentation-store-framework) — Why theme apps own `store/` content and how Store Framework consumes it at render time.
