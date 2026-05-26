@@ -1,0 +1,59 @@
+---
+description: "Markdown template for the docs/<ExtensionName>.md file generated in Step 4. Load when writing extension documentation to ensure all required sections are covered."
+globs: 
+alwaysApply: false
+---
+
+# Extension Documentation Template
+
+Generate `docs/<ExtensionName>.md` inside the Sales App package. Create the `docs/` folder if it does not exist.
+
+The document must contain these 9 sections:
+
+1. **Extension name** — title matching the component name.
+2. **Overview** — one-paragraph summary of what the extension does and why it was built.
+3. **Extension point** — which extension point it registers on (e.g., `cart.cart-list.after`) and why that point was chosen.
+4. **Hooks used** — list each hook (`useCart`, `usePDP`, etc.) with a brief explanation of what data it provides to this extension.
+5. **Component structure** — description of the component tree, props, and state management.
+6. **Styling** — CSS file name and summary of key classes.
+7. **API integration** (if applicable) — endpoint, auth strategy (IO Proxy or direct), request/response shape.
+   - **Source documentation:** URL or file path of the original API documentation, if provided.
+   - **Generated types:** list of TypeScript interfaces generated from the API documentation.
+   - Note which fields are optional (`?`) vs required per the documentation.
+8. **How to test** — dev server command and URL to reach the extension.
+9. **Known constraints** — any guards, edge cases, or limitations (e.g., `useCartItem().item` may be undefined).
+
+```markdown
+# <ExtensionName>
+
+## Overview
+<One-paragraph description of the extension purpose and value.>
+
+## Extension point
+- **Point:** `<extension.point.name>`
+- **Rationale:** <Why this extension point was selected.>
+
+## Hooks used
+| Hook | Purpose |
+|------|---------|
+| `useCart` | <What data it provides here> |
+
+## Component structure
+<Describe the component tree, key props, and internal state.>
+
+## Styling
+- **File:** `<ComponentName>.css`
+- <Summary of key CSS classes and design decisions.>
+
+## API integration
+- **Endpoint:** `/_v/...`
+- **Auth strategy:** IO Proxy / Direct / None
+- **Request/Response:** <Brief shape description.>
+
+## How to test
+Run `yarn fsp dev {account}` and navigate to `https://{account}.myvtex.com/sales-app/...` to verify the extension renders.
+
+## Known constraints
+- <Guard or limitation 1>
+- <Guard or limitation 2>
+```

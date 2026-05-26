@@ -67,6 +67,18 @@ When importing, exporting, or migrating large datasets:
 - Use `searchDocuments` for bounded result sets (known small size, max page size 100). Use `scrollDocuments` for large/unbounded result sets.
 - The `masterdata` builder creates a new schema per app version. Clean up unused schemas to avoid the 60-schema-per-entity hard limit.
 
+### `v-*` schema extensions (v-indexed, v-cache, v-security, v-triggers, etc.)
+
+Master Data v2 extends standard JSON Schema with `v-*` properties that control indexing, caching, security, defaults, triggers, and schema inheritance. For the **complete reference** on each extension—when to use, when not to, and detailed configuration—see the [vtex-io-masterdata-strategy](../vtex-io-masterdata-strategy/SKILL.md) skill.
+
+The essentials for IO app development:
+
+- **`v-indexed`** — All fields used in `where` clauses **must** be listed here. Don't over-index; each index increases write latency.
+- **`v-cache`** — Leave `true` (default) for read-heavy entities. Set `false` for high-write entities needing immediate read consistency.
+- **`v-default-fields`** — Keep minimal. Controls what's returned when the caller omits `fields`.
+- **`v-security`** — Set `allowGetAll: false` and never expose PII in `publicRead`/`publicFilter`.
+- **`v-triggers`** — For simple automated actions (email, webhook). Use IO events for complex orchestration.
+
 MasterDataClient methods:
 
 | Method                              | Description                                          |
@@ -314,10 +326,10 @@ Entities used for application **logging**, **caching** (IO app state, query resu
 
 ```typescript
 // Logs: use structured logger
-ctx.vtex.logger.info({ action: 'priceUpdate', skuId, newPrice })
+ctx.vtex.logger.info({ action: "priceUpdate", skuId, newPrice });
 
 // Cache: use VBase
-await ctx.clients.vbase.saveJSON('my-cache', cacheKey, data)
+await ctx.clients.vbase.saveJSON("my-cache", cacheKey, data);
 ```
 
 **Wrong**
@@ -325,9 +337,13 @@ await ctx.clients.vbase.saveJSON('my-cache', cacheKey, data)
 ```typescript
 // Using MD as a log store — creates millions of documents
 await ctx.clients.masterdata.createDocument({
-  dataEntity: 'appLogs',
-  fields: { level: 'info', message: `Price updated for ${skuId}`, timestamp: new Date() },
-})
+  dataEntity: "appLogs",
+  fields: {
+    level: "info",
+    message: `Price updated for ${skuId}`,
+    timestamp: new Date(),
+  },
+});
 ```
 
 ### Constraint: Do not create a parallel source of truth in Master Data without justification
@@ -617,6 +633,7 @@ export default new Service<Clients, RecorderState, ParamsContext>({
 
 ## Related skills
 
+- [vtex-io-masterdata-strategy](../vtex-io-masterdata-strategy/SKILL.md) — When to use MD, `v-*` schema extensions reference, indexing strategy, triggers, capacity planning
 - [vtex-io-application-performance](../vtex-io-application-performance/SKILL.md) — IO performance patterns (cache layers, BFF-facing behavior)
 - [vtex-io-service-paths-and-cdn](../vtex-io-service-paths-and-cdn/SKILL.md) — Public vs private routes for MD-backed APIs
 - [vtex-io-session-apps](../vtex-io-session-apps/SKILL.md) — Session transforms that may read from or complement MD-stored state
