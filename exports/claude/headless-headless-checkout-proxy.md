@@ -12,48 +12,57 @@ Use this skill when building cart and checkout functionality for any headless VT
 - Managing `orderFormId` and `CheckoutOrderFormOwnership` cookies server-side
 
 Do not use this skill for:
+
 - General BFF architecture and API routing (use [`headless-bff-architecture`](../headless-bff-architecture/skill.md))
 - Search API integration (use [`headless-intelligent-search`](../headless-intelligent-search/skill.md))
 - Caching strategy decisions (use [`headless-caching-strategy`](../headless-caching-strategy/skill.md))
 
 ## Decision rules
 
-- ALL Checkout API calls MUST be proxied through the BFF — no exceptions. The Checkout API handles sensitive personal data (profile, address, payment).
+- ALL Checkout API calls (`/api/checkout/...` on `vtexcommercestable.com.br`) MUST be proxied through the BFF. The Checkout API handles sensitive personal data (profile, address, payment-method selection).
+- **PCI carve-out:** the Send payments information call to the VTEX Payment Gateway (`POST https://{account}.vtexpayments.com.br/api/pub/transactions/{tid}/payments`) MUST go directly from the browser/app to `vtexpayments.com.br` whenever it carries card data. The merchant BFF MUST NOT be in the card-data path. See the dedicated hard constraint below and [`payment-pci-security`](../../../payment/skills/payment-pci-security/skill.md).
 - Store `orderFormId` in a server-side session, never in `localStorage` or `sessionStorage`.
 - Capture and forward `CheckoutOrderFormOwnership` and `checkout.vtex.com` cookies between the BFF and VTEX on every request.
 - Validate all inputs server-side before forwarding to VTEX — never pass raw `req.body` directly.
-- Execute the 3-step order placement flow (place order → send payment → process order) in a single synchronous BFF handler to stay within the **5-minute window**.
+- Execute the 3-step order placement flow (place order → send payment → process order) as a single synchronous user interaction within the **5-minute window**. Step 1 (place) and Step 3 (gateway callback) run in the BFF; Step 2 (send payment data to `vtexpayments.com.br`) runs in the browser per the PCI carve-out above.
 - Always store and reuse the existing `orderFormId` from the session — only create a new cart when no `orderFormId` exists.
+- Pass intermediate flow values such as `orderGroup` between Step 1 (`/place`) and Step 3 (`/process`) **through the request body**, not through `req.session`. Production BFFs are typically multi-replica; `express-session`'s default `MemoryStore` (and any per-pod cache) loses the value when the two requests land on different pods, returning a misleading "no pending order to process" 400. If a shared session store (Redis, Memcached, database) is already required for `orderFormId`/`vtexCookies`, see the Hard constraint below for why the cross-step handoff still belongs in the request body — it stays correct under partial outages, sticky-routing failures, and replay/refresh after a tab reload.
 
 OrderForm attachment endpoints:
 
-| Attachment | Endpoint | Purpose |
-|---|---|---|
-| items | `POST .../orderForm/{id}/items` | Add, remove, or update cart items |
-| clientProfileData | `POST .../orderForm/{id}/attachments/clientProfileData` | Customer profile info |
-| shippingData | `POST .../orderForm/{id}/attachments/shippingData` | Address and delivery option |
-| paymentData | `POST .../orderForm/{id}/attachments/paymentData` | Payment method selection |
-| marketingData | `POST .../orderForm/{id}/attachments/marketingData` | Coupons and UTM data |
+| Attachment        | Endpoint                                                | Purpose                           |
+| ----------------- | ------------------------------------------------------- | --------------------------------- |
+| items             | `POST .../orderForm/{id}/items`                         | Add, remove, or update cart items |
+| clientProfileData | `POST .../orderForm/{id}/attachments/clientProfileData` | Customer profile info             |
+| shippingData      | `POST .../orderForm/{id}/attachments/shippingData`      | Address and delivery option       |
+| paymentData       | `POST .../orderForm/{id}/attachments/paymentData`       | Payment method selection          |
+| marketingData     | `POST .../orderForm/{id}/attachments/marketingData`     | Coupons and UTM data              |
 
 ## Hard constraints
 
-### Constraint: ALL checkout operations MUST go through BFF
+### Constraint: ALL Checkout API operations MUST go through BFF
 
-Client-side code MUST NOT make direct HTTP requests to any VTEX Checkout API endpoint (`/api/checkout/`). All checkout operations — cart creation, item management, profile updates, shipping, payment, and order placement — must be proxied through the BFF layer.
+Client-side code MUST NOT make direct HTTP requests to any VTEX Checkout API endpoint on `vtexcommercestable.com.br/api/checkout/...`. All Checkout API operations — cart creation, item management, profile updates, shipping, payment-method selection (`paymentData` attachment), order placement (`/transaction`), and order processing (`/gatewayCallback`) — must be proxied through the BFF.
+
+This rule applies to the Checkout API only. The Send payments information call on `vtexpayments.com.br` is governed by the next constraint and goes the opposite way (browser-direct) for PCI reasons; do not generalize this rule to that endpoint.
 
 **Why this matters**
 
-Checkout endpoints handle sensitive personal data (email, address, phone, payment details). Direct frontend calls expose the request/response flow to browser DevTools, extensions, and XSS attacks. Additionally, the BFF layer is needed to manage `VtexIdclientAutCookie` and `CheckoutOrderFormOwnership` cookies server-side, validate inputs, and prevent cart manipulation (e.g., price tampering).
+Checkout endpoints handle sensitive personal data (email, address, phone, payment-method selection). Direct frontend calls expose the request/response flow to browser DevTools, extensions, and XSS attacks. Additionally, the BFF layer is needed to manage `VtexIdclientAutCookie` and `CheckoutOrderFormOwnership` cookies server-side, validate inputs, and prevent cart manipulation (e.g., price tampering).
 
 **Detection**
 
-If you see `fetch` or `axios` calls to `/api/checkout/` in any client-side code (browser-executed JavaScript, frontend source files) → STOP immediately. All checkout calls must route through BFF endpoints.
+If you see `fetch` or `axios` calls to `vtexcommercestable.com.br/api/checkout/...` in any client-side code (browser-executed JavaScript, frontend source files) → STOP immediately. All Checkout API calls must route through BFF endpoints.
 
 **Correct**
 
 ```typescript
 // Frontend — calls BFF endpoint, never VTEX directly
-async function addItemToCart(skuId: string, quantity: number, seller: string): Promise<OrderForm> {
+async function addItemToCart(
+  skuId: string,
+  quantity: number,
+  seller: string,
+): Promise<OrderForm> {
   const response = await fetch("/api/bff/cart/items", {
     method: "POST",
     credentials: "include",
@@ -73,7 +82,11 @@ async function addItemToCart(skuId: string, quantity: number, seller: string): P
 
 ```typescript
 // Frontend — calls VTEX Checkout API directly (SECURITY VULNERABILITY)
-async function addItemToCart(skuId: string, quantity: number, seller: string): Promise<OrderForm> {
+async function addItemToCart(
+  skuId: string,
+  quantity: number,
+  seller: string,
+): Promise<OrderForm> {
   const orderFormId = localStorage.getItem("orderFormId"); // Also wrong: see next constraint
   const response = await fetch(
     `https://mystore.vtexcommercestable.com.br/api/checkout/pub/orderForm/${orderFormId}/items`,
@@ -83,10 +96,121 @@ async function addItemToCart(skuId: string, quantity: number, seller: string): P
       body: JSON.stringify({
         orderItems: [{ id: skuId, quantity, seller }],
       }),
-    }
+    },
   );
   return response.json();
 }
+```
+
+---
+
+### Constraint: Card data MUST go directly from browser/app to vtexpayments.com.br — never through the BFF
+
+The Send payments information call (`POST https://{account}.vtexpayments.com.br/api/pub/transactions/{tid}/payments?orderId={orderGroup}`) carries card data when the shopper pays with a credit, debit, or co-branded card. This call MUST originate from the shopper's browser or native app and MUST target `vtexpayments.com.br` directly. The BFF MUST NOT proxy this call when card data is involved, even with redaction, even with `appKey`/`appToken` on the server side, and even when only "tokenized" fields appear to be forwarded.
+
+This is the inverse of the previous constraint. Treating it as a generic "checkout" call and routing it through the BFF — as some agents do when applying the "all checkout through BFF" rule too broadly — is a PCI DSS violation, not a security improvement.
+
+**Why this matters**
+
+The merchant operating the headless storefront is rarely PCI DSS Level 1 certified. Routing card numbers, holder names, or CVV through the merchant's BFF places the BFF and every system it touches — application logs, APM/observability tools, reverse proxies, load balancers, error trackers — inside PCI scope. Operating a non-PCI environment that handles card data violates PCI DSS Requirements 3 and 4 and can result in fines from $5,000 to over $100,000 per month from card networks, mandatory forensic investigation costs, loss of card processing ability, and legal liability.
+
+The browser → `vtexpayments.com.br` path is the PCI-compliant pattern: the VTEX Payment Gateway is PCI DSS Level 1 certified and is the only environment in this flow authorized to receive raw card data. The Send payments call is authenticated by the shopper's session cookies set by the previous Place Order step — no merchant credentials are needed on the BFF for this hop.
+
+**Detection**
+
+If you find any of the following in BFF / server-side code (`server/`, `bff/`, `api/`, route handlers, middleware, edge functions, lambdas), STOP immediately:
+
+- A request from the BFF to `https://*.vtexpayments.com.br/api/pub/transactions/.../payments`,
+- A handler that accepts `cardNumber`, `holderName`, `validationCode`, `csc`, `dueDate`, or full payment `fields` from the browser and forwards them to any VTEX endpoint,
+- A "Payments client" / `ExternalClient` / `axios` instance that targets `vtexpayments.com.br` for the Send payments information endpoint.
+
+Move that call to the browser/app. The BFF should instead return `transactionId`, `orderGroup`, and `merchantName` from the Place Order step so the frontend can post payment data directly to the Payment Gateway.
+
+This rule applies even when:
+
+- The merchant has a VTEX `appKey`/`appToken` with payment permissions — possessing the credentials does not grant PCI authorization.
+- Only "tokenized" card fields are forwarded — token values still reference real card data and are in PCI scope.
+- The BFF code "redacts" sensitive fields before logging — the request still transits the merchant infrastructure before redaction.
+- The BFF runs on a private VPC with TLS — PCI scope is determined by what data passes through, not by how the network is configured.
+
+**Correct**
+
+```typescript
+async function sendPaymentDataDirect(args: {
+  account: string;
+  transactionId: string;
+  orderGroup: string;
+  merchantName: string;
+  paymentInformation: PaymentField[];
+}): Promise<void> {
+  const {
+    account,
+    transactionId,
+    orderGroup,
+    merchantName,
+    paymentInformation,
+  } = args;
+
+  const response = await fetch(
+    `https://${account}.vtexpayments.com.br/api/pub/transactions/${transactionId}/payments?orderId=${orderGroup}`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(
+        paymentInformation.map((p) => ({
+          ...p,
+          transaction: { id: transactionId, merchantName },
+        })),
+      ),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Payment submission failed: ${response.status}`);
+  }
+}
+```
+
+**Wrong**
+
+```typescript
+const VTEX_APP_KEY = process.env.VTEX_APP_KEY!;
+const VTEX_APP_TOKEN = process.env.VTEX_APP_TOKEN!;
+
+paymentRoutes.post("/", async (req: Request, res: Response) => {
+  const { transactionId, orderGroup, paymentInformation } = req.body as {
+    transactionId: string;
+    orderGroup: string;
+    paymentInformation: Array<{
+      paymentSystem: number;
+      installments: number;
+      value: number;
+      fields: {
+        cardNumber: string;
+        holderName: string;
+        validationCode: string;
+        dueDate: string;
+      };
+    }>;
+  };
+
+  const url = `https://${process.env.VTEX_ACCOUNT}.vtexpayments.com.br/api/pub/transactions/${transactionId}/payments?orderId=${orderGroup}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-VTEX-API-AppKey": VTEX_APP_KEY,
+      "X-VTEX-API-AppToken": VTEX_APP_TOKEN,
+    },
+    body: JSON.stringify(paymentInformation),
+  });
+
+  res.json({ status: response.status });
+});
 ```
 
 ---
@@ -146,7 +270,9 @@ cartRoutes.get("/", async (req: Request, res: Response) => {
 });
 
 // Remove sensitive data before sending to frontend
-function sanitizeOrderForm(orderForm: Record<string, unknown>): Record<string, unknown> {
+function sanitizeOrderForm(
+  orderForm: Record<string, unknown>,
+): Record<string, unknown> {
   const sanitized = { ...orderForm };
   delete sanitized._cookies;
   return sanitized;
@@ -162,7 +288,7 @@ async function getCart(): Promise<OrderForm> {
 
   if (!orderFormId) {
     const response = await fetch(
-      "https://mystore.vtexcommercestable.com.br/api/checkout/pub/orderForm"
+      "https://mystore.vtexcommercestable.com.br/api/checkout/pub/orderForm",
     );
     const data = await response.json();
     orderFormId = data.orderFormId;
@@ -170,10 +296,108 @@ async function getCart(): Promise<OrderForm> {
   }
 
   const response = await fetch(
-    `https://mystore.vtexcommercestable.com.br/api/checkout/pub/orderForm/${orderFormId}`
+    `https://mystore.vtexcommercestable.com.br/api/checkout/pub/orderForm/${orderFormId}`,
   );
   return response.json();
 }
+```
+
+---
+
+### Constraint: Multi-step order flow handoffs MUST travel in the request body, not in `req.session`
+
+Values that link `/place` (Step 1) and `/process` (Step 3) — most importantly `orderGroup`, but also any per-attempt `transactionId` or merchant context the frontend needs to echo back — MUST be returned by `/place` to the browser and sent back by the browser in the `/process` request body. The handler MUST NOT rely on `req.session.pendingOrderGroup` (or any per-pod cache) as the only source of truth for the in-flight order.
+
+**Why this matters**
+
+Production BFFs run multiple replicas (Kubernetes deployments, ECS services, lambdas behind an ALB, edge runtimes). `express-session` defaults to `MemoryStore`, which is per-pod, so a session value written on one pod is invisible to every other pod. Even with a shared session store (Redis, DynamoDB, Memcached), Step 1 and Step 3 fire as fast as the user can roundtrip through `vtexpayments.com.br`, so any partial Redis outage, write replication lag, sticky-routing failure, tab refresh, or session regeneration on login surfaces as `400 — no pending order to process`. From the shopper's point of view the order is paid (their card was charged in Step 2) but the storefront reports failure, and support has to reconcile by hand. The 5-minute order processing window leaves no time for retries.
+
+`orderGroup` is not a secret. It already returns to the browser from Step 1 and is required by the direct browser → `vtexpayments.com.br` call in Step 2. Echoing it back in Step 3 is strictly less surface area than session-backed state. Authentication and ownership are still enforced server-side through the session-bound `vtexCookies`, `orderFormId`, and (when present) `vtexAuthToken` — the BFF never trusts `orderGroup` alone.
+
+**Detection**
+
+If you find any of the following in BFF / server-side checkout code, STOP immediately:
+
+- Any read or write of `req.session.pendingOrderGroup`, `req.session.orderGroup`, `req.session.lastTransactionId`, or similar per-flow values written in `/place` and read in `/process`.
+- A `/process` (or `/gatewayCallback`) handler whose only source of `orderGroup` is `req.session`, with no `req.body.orderGroup` fallback or validation.
+- A frontend `placeOrder` flow that calls `/api/bff/order/process` with no body and no `orderGroup`, relying on the BFF to "remember" the order.
+- Comments like "// rely on session to recover orderGroup" or commits that move `orderGroup` from request bodies into the session for "tidiness".
+
+**Correct**
+
+```typescript
+orderRoutes.post("/place", async (req: Request, res: Response) => {
+  const orderFormId = req.session.orderFormId;
+  if (!orderFormId) return res.status(400).json({ error: "No active cart" });
+
+  const { data } = await vtexCheckout<PlaceOrderResponse>({
+    path: `/api/checkout/pub/orderForm/${orderFormId}/transaction`,
+    method: "POST",
+    body: { referenceId: orderFormId },
+    cookies: req.session.vtexCookies || {},
+    userToken: req.session.vtexAuthToken,
+  });
+
+  res.json({
+    account: process.env.VTEX_ACCOUNT,
+    orderId: data.orders[0].orderId,
+    orderGroup: data.orderGroup,
+    transactionId: data.orders[0].transactionData.merchantTransactions[0].transactionId,
+    merchantName: data.orders[0].transactionData.merchantTransactions[0].merchantName,
+  });
+});
+
+orderRoutes.post("/process", async (req: Request, res: Response) => {
+  const orderGroup =
+    typeof req.body?.orderGroup === "string" ? req.body.orderGroup : undefined;
+  if (!orderGroup || !/^[A-Za-z0-9-]+$/.test(orderGroup)) {
+    return res.status(400).json({ error: "Missing or invalid orderGroup" });
+  }
+  if (!req.session.orderFormId) {
+    return res.status(400).json({ error: "No active checkout session" });
+  }
+
+  await vtexCheckout({
+    path: `/api/checkout/pub/gatewayCallback/${orderGroup}`,
+    method: "POST",
+    cookies: req.session.vtexCookies || {},
+  });
+
+  delete req.session.orderFormId;
+  delete req.session.vtexCookies;
+  res.json({ orderGroup, status: "processed" });
+});
+```
+
+The matching browser flow — `/place` returns `orderGroup` and the browser echoes it back in the `/process` body — is shown in the Preferred pattern below.
+
+**Wrong**
+
+```typescript
+orderRoutes.post("/place", async (req: Request, res: Response) => {
+  // ... call /transaction ...
+  req.session.pendingOrderGroup = orderGroup;
+  res.json({ account, orderId, orderGroup, transactionId, merchantName });
+});
+
+orderRoutes.post("/process", async (req: Request, res: Response) => {
+  // BUG: works in dev with one Node process and MemoryStore, returns
+  // `400 — no pending order to process` the moment the load balancer routes
+  // /place and /process to different replicas.
+  const orderGroup = req.session.pendingOrderGroup;
+  if (!orderGroup) {
+    return res.status(400).json({ error: "No pending order to process" });
+  }
+
+  await vtexCheckout({
+    path: `/api/checkout/pub/gatewayCallback/${orderGroup}`,
+    method: "POST",
+    cookies: req.session.vtexCookies || {},
+  });
+
+  delete req.session.pendingOrderGroup;
+  res.json({ status: "processed" });
+});
 ```
 
 ---
@@ -225,7 +449,8 @@ cartItemsRoutes.post("/", async (req: Request, res: Response) => {
   if (!validateAddItemInput(req.body)) {
     return res.status(400).json({
       error: "Invalid input",
-      details: "skuId must be numeric, quantity must be 1-100, seller must be alphanumeric",
+      details:
+        "skuId must be numeric, quantity must be 1-100, seller must be alphanumeric",
     });
   }
 
@@ -315,7 +540,7 @@ interface CheckoutResponse<T = unknown> {
 }
 
 export async function vtexCheckout<T>(
-  options: CheckoutRequestOptions
+  options: CheckoutRequestOptions,
 ): Promise<CheckoutResponse<T>> {
   const { path, method = "GET", body, cookies = {}, userToken } = options;
 
@@ -330,7 +555,9 @@ export async function vtexCheckout<T>(
     cookieParts.push(`checkout.vtex.com=${cookies["checkout.vtex.com"]}`);
   }
   if (cookies["CheckoutOrderFormOwnership"]) {
-    cookieParts.push(`CheckoutOrderFormOwnership=${cookies["CheckoutOrderFormOwnership"]}`);
+    cookieParts.push(
+      `CheckoutOrderFormOwnership=${cookies["CheckoutOrderFormOwnership"]}`,
+    );
   }
   if (userToken) {
     cookieParts.push(`VtexIdclientAutCookie=${userToken}`);
@@ -348,7 +575,7 @@ export async function vtexCheckout<T>(
   if (!response.ok) {
     const errorBody = await response.text();
     throw new Error(
-      `Checkout API error: ${response.status} for ${method} ${path}: ${errorBody}`
+      `Checkout API error: ${response.status} for ${method} ${path}: ${errorBody}`,
     );
   }
 
@@ -409,14 +636,23 @@ cartRoutes.post("/items", async (req: Request, res: Response) => {
   }
 
   for (const item of items) {
-    if (!item.id || typeof item.quantity !== "number" || item.quantity < 1 || !item.seller) {
-      return res.status(400).json({ error: "Each item must have id, quantity (>0), and seller" });
+    if (
+      !item.id ||
+      typeof item.quantity !== "number" ||
+      item.quantity < 1 ||
+      !item.seller
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Each item must have id, quantity (>0), and seller" });
     }
   }
 
   const orderFormId = req.session.orderFormId;
   if (!orderFormId) {
-    return res.status(400).json({ error: "No active cart. Call GET /api/bff/cart first." });
+    return res
+      .status(400)
+      .json({ error: "No active cart. Call GET /api/bff/cart first." });
   }
 
   try {
@@ -437,22 +673,24 @@ cartRoutes.post("/items", async (req: Request, res: Response) => {
 });
 ```
 
-Order placement — all 3 steps in a single handler to respect the **5-minute window**:
+Order placement — Steps 1 and 3 run in the BFF; Step 2 runs in the browser per the PCI carve-out. All 3 steps must complete within the **5-minute window**.
 
 ```typescript
-// server/routes/order.ts
+// server/routes/order.ts — BFF handles Step 1 (place) and Step 3 (process) only.
+// Step 2 (send payment data) runs in the browser; see the card-data carve-out constraint.
 import { Router, Request, Response } from "express";
 import { vtexCheckout } from "../vtex-checkout-client";
 
 export const orderRoutes = Router();
 
 const VTEX_ACCOUNT = process.env.VTEX_ACCOUNT!;
-const VTEX_ENVIRONMENT = process.env.VTEX_ENVIRONMENT || "vtexcommercestable";
-const VTEX_APP_KEY = process.env.VTEX_APP_KEY!;
-const VTEX_APP_TOKEN = process.env.VTEX_APP_TOKEN!;
 
-// POST /api/bff/order/place — place order from existing cart
-// CRITICAL: All 3 steps must complete within 5 minutes or the order is canceled
+// POST /api/bff/order/place — Step 1: place order from existing cart.
+// Returns the data the browser needs to call vtexpayments.com.br directly in
+// Step 2 AND to call /api/bff/order/process in Step 3. The browser is the
+// authority for `orderGroup` between Step 1 and Step 3 — the BFF does NOT
+// stash it in `req.session`, because that would silently break in any
+// multi-replica deployment whose session store is in-memory or sticky-routed.
 orderRoutes.post("/place", async (req: Request, res: Response) => {
   const orderFormId = req.session.orderFormId;
   if (!orderFormId) {
@@ -460,7 +698,6 @@ orderRoutes.post("/place", async (req: Request, res: Response) => {
   }
 
   try {
-    // Step 1: Place order — starts the 5-minute timer
     const placeResult = await vtexCheckout<PlaceOrderResponse>({
       path: `/api/checkout/pub/orderForm/${orderFormId}/transaction`,
       method: "POST",
@@ -470,78 +707,100 @@ orderRoutes.post("/place", async (req: Request, res: Response) => {
     });
 
     const { orders, orderGroup } = placeResult.data;
-
-    if (!orders || orders.length === 0) {
-      return res.status(500).json({ error: "Order placement returned no orders" });
+    if (!orders?.length) {
+      return res
+        .status(500)
+        .json({ error: "Order placement returned no orders" });
     }
 
     const orderId = orders[0].orderId;
-    const transactionId =
-      orders[0].transactionData.merchantTransactions[0]?.transactionId;
-
-    // Step 2: Send payment — immediately after placement
-    const { paymentData } = req.body as {
-      paymentData: {
-        paymentSystem: number;
-        installments: number;
-        value: number;
-        referenceValue: number;
-      };
-    };
-
-    if (!paymentData) {
-      return res.status(400).json({ error: "Payment data is required" });
-    }
-
-    const paymentUrl = `https://${VTEX_ACCOUNT}.${VTEX_ENVIRONMENT}.com.br/api/payments/transactions/${transactionId}/payments`;
-    const paymentResponse = await fetch(paymentUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-VTEX-API-AppKey": VTEX_APP_KEY,
-        "X-VTEX-API-AppToken": VTEX_APP_TOKEN,
-      },
-      body: JSON.stringify([
-        {
-          paymentSystem: paymentData.paymentSystem,
-          installments: paymentData.installments,
-          currencyCode: "BRL",
-          value: paymentData.value,
-          installmentsInterestRate: 0,
-          installmentsValue: paymentData.value,
-          referenceValue: paymentData.referenceValue,
-          fields: {},
-          transaction: { id: transactionId, merchantName: VTEX_ACCOUNT },
-        },
-      ]),
-    });
-
-    if (!paymentResponse.ok) {
-      return res.status(500).json({ error: "Payment submission failed" });
-    }
-
-    // Step 3: Process order — immediately after payment
-    await vtexCheckout<unknown>({
-      path: `/api/checkout/pub/gatewayCallback/${orderGroup}`,
-      method: "POST",
-      cookies: req.session.vtexCookies || {},
-    });
-
-    // Clear cart session after successful order
-    delete req.session.orderFormId;
-    delete req.session.vtexCookies;
+    const merchantTransaction =
+      orders[0].transactionData.merchantTransactions[0];
+    const transactionId = merchantTransaction?.transactionId;
+    const merchantName = merchantTransaction?.merchantName ?? VTEX_ACCOUNT;
 
     res.json({
+      account: VTEX_ACCOUNT,
       orderId,
       orderGroup,
       transactionId,
-      status: "placed",
+      merchantName,
     });
   } catch (error) {
     console.error("Error placing order:", error);
     res.status(500).json({ error: "Failed to place order" });
   }
 });
+
+// POST /api/bff/order/process — Step 3: process gateway callback after the
+// browser has submitted payment data directly to vtexpayments.com.br in Step 2.
+// Carries no card data; safe to run server-side. The browser passes back the
+// same `orderGroup` it received from /place so the handler is stateless across
+// replicas. The BFF still validates ownership through the session-bound
+// orderFormId + checkout cookies before calling VTEX.
+orderRoutes.post("/process", async (req: Request, res: Response) => {
+  const orderGroup =
+    typeof req.body?.orderGroup === "string" ? req.body.orderGroup : undefined;
+  if (!orderGroup || !/^[A-Za-z0-9-]+$/.test(orderGroup)) {
+    return res.status(400).json({ error: "Missing or invalid orderGroup" });
+  }
+  if (!req.session.orderFormId) {
+    return res.status(400).json({ error: "No active checkout session" });
+  }
+
+  try {
+    await vtexCheckout<unknown>({
+      path: `/api/checkout/pub/gatewayCallback/${orderGroup}`,
+      method: "POST",
+      cookies: req.session.vtexCookies || {},
+    });
+
+    delete req.session.orderFormId;
+    delete req.session.vtexCookies;
+
+    res.json({ orderGroup, status: "processed" });
+  } catch (error) {
+    console.error("Error processing order:", error);
+    res.status(500).json({ error: "Failed to process order" });
+  }
+});
+```
+
+```typescript
+// frontend/checkout/placeOrder.ts — Step 2 runs in the browser.
+// Card fields stay on the device; the BFF never sees them.
+// Step 3 echoes `orderGroup` back to the BFF in the request body so it works
+// the same way whether the BFF runs on one pod or fifty.
+async function placeOrderWithCard(card: CardPaymentInformation) {
+  const placeResp = await fetch("/api/bff/order/place", {
+    method: "POST",
+    credentials: "include",
+  });
+  const { account, orderGroup, transactionId, merchantName } =
+    await placeResp.json();
+
+  await fetch(
+    `https://${account}.vtexpayments.com.br/api/pub/transactions/${transactionId}/payments?orderId=${orderGroup}`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        { ...card, transaction: { id: transactionId, merchantName } },
+      ]),
+    },
+  );
+
+  await fetch("/api/bff/order/process", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orderGroup }),
+  });
+}
 ```
 
 ## Common failure modes
@@ -569,60 +828,79 @@ orderRoutes.post("/place", async (req: Request, res: Response) => {
   });
   ```
 
-- **Ignoring the 5-minute order processing window**: Placing an order (step 1) but delaying payment or processing beyond 5 minutes causes VTEX to automatically cancel the order as `incomplete`. Execute all three steps (place order → send payment → process order) sequentially and immediately in a single BFF request handler. Never split these across multiple independent frontend calls.
+- **Ignoring the 5-minute order processing window**: Placing an order (Step 1) but delaying payment or processing beyond 5 minutes causes VTEX to automatically cancel the order as `incomplete`. Execute Steps 1 → 2 → 3 sequentially and immediately as a single user interaction. Step 1 (place) and Step 3 (gateway callback) run in the BFF; Step 2 (send payment data) runs in the browser per the card-data carve-out above. Do not pause for additional UI between steps.
 
   ```typescript
-  // Execute all 3 steps in a single, synchronous flow
-  orderRoutes.post("/place", async (req: Request, res: Response) => {
-    try {
-      // Step 1: Place order — starts the 5-minute timer
-      const placeResult = await vtexCheckout<PlaceOrderResponse>({
-        path: `/api/checkout/pub/orderForm/${req.session.orderFormId}/transaction`,
-        method: "POST",
-        body: { referenceId: req.session.orderFormId },
-        cookies: req.session.vtexCookies || {},
-      });
+  // Frontend orchestrates Place (BFF) → Pay (browser → vtexpayments.com.br) → Process (BFF)
+  // on a single click, well within the 5-minute window.
+  async function onPlaceOrderClick(card: CardPaymentInformation) {
+    const { account, orderGroup, transactionId, merchantName } =
+      await fetchJson("/api/bff/order/place", { method: "POST" });
 
-      // Step 2: Send payment — immediately after placement
-      await sendPayment(placeResult.data);
+    await sendPaymentDirectToGateway({
+      account,
+      transactionId,
+      orderGroup,
+      merchantName,
+      card,
+    });
 
-      // Step 3: Process order — immediately after payment
-      await processOrder(placeResult.data.orderGroup);
-
-      res.json({ success: true, orderId: placeResult.data.orders[0].orderId });
-    } catch (error) {
-      console.error("Order placement failed:", error);
-      res.status(500).json({ error: "Order placement failed" });
-    }
-  });
+    await fetchJson("/api/bff/order/process", {
+      method: "POST",
+      body: { orderGroup },
+    });
+  }
   ```
+
+- **Proxying `vtexpayments.com.br` payment submission through the BFF "for consistency"**: Routing the Send payments information call through the BFF feels symmetrical with the rest of the BFF mandate, and some agents add it to "centralize all VTEX calls". When card data is involved this is a PCI DSS violation, not a refactor. Keep Step 2 in the browser; the BFF should expose `/api/bff/order/place` (returns `transactionId`/`orderGroup`/`merchantName`) and `/api/bff/order/process` (calls `/gatewayCallback`) but never `/api/bff/order/payment` for card flows.
+
+- **Storing `orderGroup` in `req.session` between `/place` and `/process`**: Writing `req.session.pendingOrderGroup` in Step 1 and reading it in Step 3 looks tidy and works in single-process local development. With `express-session`'s default `MemoryStore` (and any per-pod cache) a horizontally scaled BFF loses the value the moment the two requests land on different replicas, so `/process` returns `400 — no pending order to process` while the shopper's card has already been charged in Step 2. Return `orderGroup` from `/place` to the browser and require the browser to send it back in the `/process` body — see the dedicated hard constraint above. Even with a shared session store (Redis, Memcached, database) in place for `orderFormId`/`vtexCookies`, the cross-step handoff still belongs in the request body so the flow stays correct under partial outages, sticky-routing failures, replication lag, and tab refresh.
 
 - **Exposing raw VTEX error messages to the frontend**: Forwarding VTEX API error responses directly to the frontend leaks internal details (account names, API paths, data structures). Map VTEX errors to user-friendly messages in the BFF and log the full error server-side.
 
   ```typescript
   // Map VTEX errors to safe, user-friendly messages
-  function mapCheckoutError(vtexError: string, statusCode: number): { code: string; message: string } {
+  function mapCheckoutError(
+    vtexError: string,
+    statusCode: number,
+  ): { code: string; message: string } {
     if (statusCode === 400 && vtexError.includes("item")) {
-      return { code: "INVALID_ITEM", message: "One or more items are unavailable" };
+      return {
+        code: "INVALID_ITEM",
+        message: "One or more items are unavailable",
+      };
     }
     if (statusCode === 400 && vtexError.includes("address")) {
-      return { code: "INVALID_ADDRESS", message: "Please check your shipping address" };
+      return {
+        code: "INVALID_ADDRESS",
+        message: "Please check your shipping address",
+      };
     }
     if (statusCode === 409) {
-      return { code: "CART_CONFLICT", message: "Your cart was updated. Please review your items." };
+      return {
+        code: "CART_CONFLICT",
+        message: "Your cart was updated. Please review your items.",
+      };
     }
-    return { code: "CHECKOUT_ERROR", message: "An error occurred during checkout. Please try again." };
+    return {
+      code: "CHECKOUT_ERROR",
+      message: "An error occurred during checkout. Please try again.",
+    };
   }
   ```
 
 ## Review checklist
 
-- [ ] Are ALL checkout API calls routed through the BFF (no direct frontend calls to `/api/checkout/`)?
+- [ ] Are ALL Checkout API calls (`vtexcommercestable.com.br/api/checkout/...`) routed through the BFF (no direct frontend calls)?
+- [ ] Is the Send payments information call (`vtexpayments.com.br/api/pub/transactions/{tid}/payments`) sent from the browser/app directly, NOT proxied through the BFF, when card data is involved?
+- [ ] Are `cardNumber`, `holderName`, `validationCode`/`csc`, and `dueDate` absent from every BFF route handler and log statement?
+- [ ] Does any reference to `vtexpayments.com.br` in the codebase appear only in browser/app code, never in `server/`, `bff/`, `api/`, or other backend directories?
 - [ ] Is `orderFormId` stored in a server-side session, not in `localStorage` or `sessionStorage`?
 - [ ] Are `CheckoutOrderFormOwnership` and `checkout.vtex.com` cookies captured from VTEX responses and forwarded on subsequent requests?
 - [ ] Are all inputs validated server-side before forwarding to VTEX?
-- [ ] Does the order placement handler execute all 3 steps (place → pay → process) in a single synchronous flow within the 5-minute window?
+- [ ] Do all 3 order-placement steps (place → pay → process) execute as a single user interaction within the 5-minute window, with Steps 1 and 3 in the BFF and Step 2 in the browser direct to `vtexpayments.com.br`?
 - [ ] Is the existing `orderFormId` reused from the session rather than creating a new cart on every page load?
+- [ ] Is `orderGroup` returned by `/place` and sent back by the browser in the `/process` request body, instead of being stashed in `req.session.pendingOrderGroup` between the two BFF calls?
 - [ ] Are VTEX error responses sanitized before being sent to the frontend?
 
 ## Reference
