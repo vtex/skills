@@ -86,7 +86,13 @@ Your session transform must output **only** fields that come from **your** compu
 {
   "my-session-app": {
     "output": {
-      "myapp": ["costcenter", "organization", "postalCode", "priceTable", "storeNumber"]
+      "myapp": [
+        "costcenter",
+        "organization",
+        "postalCode",
+        "priceTable",
+        "storeNumber"
+      ]
     }
   }
 }
@@ -140,11 +146,11 @@ Storefront components and middleware must read session data from the **authorita
 ```typescript
 // Read from the authoritative namespace
 const { data } = useSessionItems([
-  'myapp.storeNumber',
-  'myapp.priceTable',
-  'storefront-permissions.costcenter',
-  'storefront-permissions.organization',
-])
+  "myapp.storeNumber",
+  "myapp.priceTable",
+  "storefront-permissions.costcenter",
+  "storefront-permissions.organization",
+]);
 ```
 
 **Wrong**
@@ -152,10 +158,10 @@ const { data } = useSessionItems([
 ```typescript
 // Reading from public as if it were the source of truth
 const { data } = useSessionItems([
-  'public.storeNumber',
-  'public.organization',
-  'public.costCenter',
-])
+  "public.storeNumber",
+  "public.organization",
+  "public.costCenter",
+]);
 ```
 
 ## Preferred pattern
@@ -168,7 +174,11 @@ Declare your transform's input dependencies and output fields:
 {
   "my-session-app": {
     "input": {
-      "storefront-permissions": ["costcenter", "organization", "costCenterAddressId"]
+      "storefront-permissions": [
+        "costcenter",
+        "organization",
+        "costCenterAddressId"
+      ]
     },
     "output": {
       "myapp": ["storeNumber", "priceTable"]
@@ -182,22 +192,22 @@ Declare your transform's input dependencies and output fields:
 ```typescript
 // node/handlers/transform.ts
 export async function transform(ctx: Context) {
-  const { costcenter, organization } = parseSfpInputs(ctx.request.body)
+  const { costcenter, organization } = parseSfpInputs(ctx.request.body);
 
   if (!costcenter) {
-    ctx.body = { myapp: {} }
-    return
+    ctx.body = { myapp: {} };
+    return;
   }
 
-  const costCenterData = await getCostCenterCached(ctx, costcenter)
-  const pricing = await resolvePricing(ctx, costCenterData)
+  const costCenterData = await getCostCenterCached(ctx, costcenter);
+  const pricing = await resolvePricing(ctx, costCenterData);
 
   ctx.body = {
     myapp: {
       storeNumber: pricing.storeNumber,
       priceTable: pricing.priceTable,
     },
-  }
+  };
 }
 ```
 
@@ -205,25 +215,28 @@ export async function transform(ctx: Context) {
 
 ```typescript
 // Two-layer cache: LRU (sub-ms) -> VBase (persistent, SWR) -> API
-const costCenterLRU = new LRU<string, CostCenterData>({ max: 1000, ttl: 600_000 })
+const costCenterLRU = new LRU<string, CostCenterData>({
+  max: 1000,
+  ttl: 600_000,
+});
 
 async function getCostCenterCached(ctx: Context, costCenterId: string) {
-  const { account, workspace } = ctx.vtex
-  const key = `${account}:${workspace}:${costCenterId}`
+  const { account, workspace } = ctx.vtex;
+  const key = `${account}:${workspace}:${costCenterId}`;
 
-  const lruHit = costCenterLRU.get(key)
-  if (lruHit) return lruHit
+  const lruHit = costCenterLRU.get(key);
+  if (lruHit) return lruHit;
 
   const result = await staleFromVBaseWhileRevalidate(
     ctx.clients.vbase,
-    'cost-centers',
+    "cost-centers",
     costCenterId,
     () => fetchCostCenterFromAPI(ctx, costCenterId),
-    { ttlMs: 1_800_000 }
-  )
+    { ttlMs: 1_800_000 },
+  );
 
-  costCenterLRU.set(key, result)
-  return result
+  costCenterLRU.set(key, result);
+  return result;
 }
 ```
 

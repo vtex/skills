@@ -1,0 +1,233 @@
+---
+name: vtex-io-rootpath
+description: "Apply when building VTEX IO apps that must work correctly in multi-binding stores where bindings use path prefixes (e.g. store.com/us/, store.com/br/). Covers rootPath extraction from x-vtex-root-path header, useRuntime().rootPath in React, URL construction in backends, link generation, asset paths, and API route considerations. Use when the app breaks or produces wrong URLs in cross-border or multi-binding setups."
+---
+
+# VTEX IO rootPath for multi-binding stores
+
+## When this skill applies
+
+Use this skill when building VTEX IO apps that must work in stores with **multi-binding** configurations—typically **cross-border** stores where multiple bindings share a single domain with **path prefixes** (e.g. `store.com/us/`, `store.com/br/`, `store.com/mx/`).
+
+- Your app generates **URLs** (links, redirects, API endpoints, canonical URLs) that must include the binding's path prefix
+- Your app loads **assets** (images, scripts, stylesheets) that break when the store uses a sub-path binding
+- Your **backend routes** need to construct URLs for sitemaps, canonical links, or cross-binding references
+- You're debugging **404s** or **wrong links** that only appear in multi-binding stores but work fine in single-binding
+
+Do not use this skill for:
+
+- Single-binding stores with a dedicated domain per locale (no path prefix needed)
+- General IO backend patterns (use `vtex-io-service-apps`)
+- CDN/edge caching configuration (use `vtex-io-service-paths-and-cdn`)
+
+## Decision rules
+
+- **Single-domain multi-binding** (e.g. `store.com/us/`, `store.com/br/`) → `rootPath` is **required**. Every generated URL must be prefixed with the binding's root path.
+- **Multi-domain single-binding** (e.g. `store.us`, `store.com.br`) → `rootPath` is typically **empty** or `/`. URLs work without prefixing, but code should still handle `rootPath` gracefully (use it if non-empty, skip if empty).
+- **Backend (Node)** → The platform sends the binding's path prefix in the `x-vtex-root-path` request header. Your app needs an **early middleware** (typically called `prepare`) that reads this header, sanitizes it, and stores it on `ctx.state.rootPath`. Once set up, all downstream handlers read `ctx.state.rootPath` directly. The middleware must also set `Vary: x-vtex-root-path` so CDN caching works correctly per binding.
+- **Frontend (React)** → Use `useRuntime().rootPath` from `vtex.render-runtime` to get the current binding's path prefix in components.
+- **Always prefix, never hardcode** — Never hardcode a path prefix like `/us/`. Always use the runtime-provided `rootPath` so the same code works across all bindings.
+
+## Hard constraints
+
+### Constraint: Always use rootPath when constructing URLs in multi-binding stores
+
+Every URL your app generates—links, redirects, API endpoints, canonical URLs, sitemap entries—must include the `rootPath` prefix when the store uses path-based bindings.
+
+**Why this matters** — Without `rootPath`, a link to `/my-account/orders` in the `/br/` binding points to the wrong binding (or 404s). Sitemaps with unprefixed URLs break SEO by pointing search engines to the wrong locale. Redirects without the prefix send users to the default binding instead of their current one.
+
+**Detection** — URLs constructed as string literals (e.g. `/${slug}`) without prepending `rootPath`. Or `navigate()` calls that omit the `rootPath` prefix.
+
+**Correct** — Prepend rootPath (parsed by prepare middleware) to all generated paths.
+
+```typescript
+// Backend: use ctx.state.rootPath (parsed by prepare middleware)
+const { rootPath, forwardedHost } = ctx.state;
+
+const canonicalUrl = `https://${forwardedHost}${rootPath}/product/${slug}`;
+const sitemapEntry = `${rootPath}/${categoryPath}`;
+```
+
+```tsx
+// Frontend: use runtime hook
+import { useRuntime } from "vtex.render-runtime";
+
+const MyLink = ({ slug }: { slug: string }) => {
+  const { rootPath } = useRuntime();
+  return <a href={`${rootPath}/product/${slug}`}>View product</a>;
+};
+```
+
+**Wrong** — Hardcoded paths without rootPath.
+
+```typescript
+// Backend: missing rootPath — breaks in multi-binding
+const canonicalUrl = `https://${host}/product/${slug}`
+
+// Frontend: hardcoded path
+const MyLink = ({ slug }: { slug: string }) => {
+  return <a href={`/product/${slug}`}>View product</a>
+}
+```
+
+### Constraint: Sanitize rootPath to avoid double slashes
+
+When `rootPath` is `"/"` (single-binding or default binding), using it directly produces double slashes in URLs (e.g. `//product/shoes`). Normalize: if `rootPath === "/"`, treat it as `""`.
+
+**Why this matters** — Double slashes in URLs cause redirect loops, broken canonical URLs, and SEO penalties. Some CDN layers treat `//path` differently from `/path`.
+
+**Detection** — URL construction that concatenates `rootPath + "/" + path` without checking for `rootPath === "/"`.
+
+**Correct**
+
+```typescript
+// In the prepare middleware, sanitize before storing on state:
+let rootPath = ctx.get("x-vtex-root-path");
+if (rootPath && !rootPath.startsWith("/")) {
+  rootPath = `/${rootPath}`;
+}
+if (rootPath === "/") {
+  rootPath = "";
+}
+ctx.state.rootPath = rootPath;
+
+// Downstream: ctx.state.rootPath is already sanitized
+const { rootPath } = ctx.state;
+const url = `${rootPath}/${path}`;
+```
+
+**Wrong**
+
+```typescript
+const rootPath = ctx.get("x-vtex-root-path") || "/";
+const url = `${rootPath}/${path}`; // Produces "//path" for default binding
+```
+
+## Preferred pattern
+
+### State interface with rootPath
+
+Declare `rootPath` and related binding state on your `State` interface so all handlers have typed access:
+
+```typescript
+// node/typings.d.ts
+declare global {
+  interface State extends RecorderState {
+    binding: Binding;
+    rootPath: string;
+    forwardedHost: string;
+    forwardedPath: string;
+    isCrossBorder: boolean;
+    matchingBindings: Binding[];
+  }
+
+  type Context = ServiceContext<Clients, State>;
+}
+```
+
+### Prepare middleware (parses rootPath from header)
+
+Wire a `prepare` middleware early in every route's middleware chain. It reads the `x-vtex-root-path` header, sanitizes it, resolves the current binding, and sets `Vary` headers so the CDN caches responses per binding:
+
+```typescript
+// node/middlewares/prepare.ts
+const FORWARDED_HOST_HEADER = "x-forwarded-host";
+const VTEX_ROOT_PATH_HEADER = "x-vtex-root-path";
+
+export async function prepare(ctx: Context, next: () => Promise<void>) {
+  const forwardedHost = ctx.get(FORWARDED_HOST_HEADER);
+
+  let rootPath = ctx.get(VTEX_ROOT_PATH_HEADER);
+
+  // Defend against malformed root path — must start with /
+  if (rootPath && !rootPath.startsWith("/")) {
+    rootPath = `/${rootPath}`;
+  }
+
+  // Normalize "/" to "" to avoid double slashes in URL construction
+  if (rootPath === "/") {
+    rootPath = "";
+  }
+
+  const [forwardedPath] = ctx.get("x-forwarded-path").split("?");
+
+  ctx.state = {
+    ...ctx.state,
+    forwardedHost,
+    forwardedPath,
+    rootPath,
+    // ... resolve binding, matchingBindings, etc.
+  };
+
+  await next();
+
+  // Vary on these headers so CDN caches separate responses per binding
+  ctx.vary(FORWARDED_HOST_HEADER);
+  ctx.vary(VTEX_ROOT_PATH_HEADER);
+}
+```
+
+Downstream handlers then use `ctx.state.rootPath` directly — no header parsing needed:
+
+```typescript
+// node/middlewares/generateSitemap.ts
+export async function generateSitemap(ctx: Context, next: () => Promise<void>) {
+  const { rootPath, binding } = ctx.state;
+  const canonicalUrl = `https://${ctx.state.forwardedHost}${rootPath}/${slug}`;
+  // ...
+}
+```
+
+### Frontend utility
+
+```tsx
+import { useRuntime } from "vtex.render-runtime";
+
+function usePrefixedPath(path: string): string {
+  const { rootPath = "" } = useRuntime();
+  const prefix = rootPath === "/" ? "" : rootPath;
+  return `${prefix}${path.startsWith("/") ? path : `/${path}`}`;
+}
+```
+
+### Binding-aware API calls from frontend
+
+```tsx
+const { rootPath, binding } = useRuntime();
+// binding.id — current binding ID
+// binding.canonicalBaseAddress — e.g. "store.com/br"
+// rootPath — e.g. "/br"
+
+// When calling backend APIs, the platform handles rootPath automatically
+// for IO-internal calls. For external URLs or custom redirects, prefix manually.
+```
+
+## Common failure modes
+
+- **Links break in multi-binding** — Navigation links constructed without `rootPath` send users to the wrong binding or 404.
+- **Sitemap has wrong URLs** — Sitemap generator omits `rootPath`, causing search engines to index unprefixed URLs that resolve to the default binding.
+- **Double slashes** — `rootPath === "/"` concatenated with `/path` produces `//path`. Normalize to empty string.
+- **Hardcoded locale paths** — Using `/us/` or `/br/` instead of dynamic `rootPath`. Breaks when bindings are reconfigured.
+- **Backend ignores header** — Node service constructs URLs without reading `x-vtex-root-path`, producing wrong canonicals in multi-binding.
+- **Missing Vary header** — Response doesn't set `Vary: x-vtex-root-path` and `Vary: x-forwarded-host`, causing the CDN to serve the same cached response for different bindings.
+
+## Review checklist
+
+- [ ] Does the app have a `prepare` middleware that reads `x-vtex-root-path` into `ctx.state.rootPath` (backend) or use `useRuntime()` (frontend)?
+- [ ] Does the response set `Vary: x-vtex-root-path` and `Vary: x-forwarded-host` so CDN caches per binding?
+- [ ] Are **all** generated URLs (links, redirects, canonicals, sitemaps) prefixed with `rootPath`?
+- [ ] Is `rootPath === "/"` normalized to `""` to avoid double slashes?
+- [ ] Are there **no** hardcoded locale path prefixes (e.g. `/us/`, `/br/`)?
+- [ ] Does the app work correctly in both single-binding and multi-binding stores?
+
+## Related skills
+
+- [vtex-io-service-paths-and-cdn](../vtex-io-service-paths-and-cdn/SKILL.md) — Route prefixes and CDN behavior
+- [vtex-io-service-apps](../vtex-io-service-apps/SKILL.md) — Backend middleware patterns
+- [vtex-io-react-apps](../vtex-io-react-apps/SKILL.md) — Frontend component patterns
+
+## Reference
+
+- [Cross-Border Store Content Internationalization](https://developers.vtex.com/docs/guides/cross-border-custom-urls-1) — Multi-binding setup for cross-border stores
+- [Service Path Patterns](https://developers.vtex.com/docs/guides/service-path-patterns) — Public, segment, and private path prefixes
+- [App Development](https://developers.vtex.com/docs/app-development) — VTEX IO app development hub

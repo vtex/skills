@@ -1,0 +1,87 @@
+---
+name: sales-app-design-guidelines
+description: UX writing rules (sentence case) and Phosphor Icons usage for Sales App extensions. Load when writing JSX text content or when an extension needs icons. CSS-related design rules (tokens, typography, spacing, responsive) are inlined directly in the CSS template — see code-templates-and-patterns.md.
+metadata:
+  version: "2.0"
+---
+
+# Sales App Design Guidelines (non-CSS)
+
+This reference covers two topics that apply to **TSX content**, not CSS:
+
+1. **UX writing rules** — for any text rendered in JSX
+2. **Iconography** — when the extension uses icons
+
+> **For CSS:** all design tokens, typography scale, spacing grid, and responsive breakpoints are inlined directly in the CSS template at [code-templates-and-patterns.md](code-templates-and-patterns.md) §"CSS Stylesheet". That template is the single source of truth for any CSS generation. Do not invent or duplicate token values here.
+
+---
+
+## 1. UX Writing Rules
+
+Apply to every string that appears in the UI (labels, buttons, messages, placeholders, alt text).
+
+| Rule | Correct | Wrong |
+|------|---------|-------|
+| Sentence case | "Add to cart" | "ADD TO CART" |
+| Proper nouns capitalized | "VTEX account" | "vtex account" |
+| No all-caps | "Loyalty points" | "LOYALTY POINTS" |
+| No system-style placeholders | "Your email" | "EMAIL ADDRESS" |
+| No CSS uppercase transforms | (omit `text-transform: uppercase`) | `text-transform: uppercase` |
+
+These rules derive from Google Material Design and Apple Human Interface Guidelines, adopted by VTEX.
+
+---
+
+## 2. Iconography
+
+### Library
+
+All icons must come from **[Phosphor Icons](https://phosphoricons.com/)**. Do not use Material Icons, Font Awesome, Heroicons, or any other library.
+
+### Installation
+
+```bash
+yarn add @phosphor-icons/react
+```
+
+### Sizes
+
+| Usage | Size |
+|-------|------|
+| Compact / inline | 16px |
+| Standard / default | 24px |
+| Large / featured | 32–48px |
+
+Always use sizes within **16px to 48px**.
+
+### Weights
+
+Use **Regular** or **Bold** weight variants. Keep the weight consistent within a single component.
+
+### Usage example
+
+```typescript
+import { ShoppingCart, Star, Warning } from '@phosphor-icons/react';
+
+export function MyExtension(): JSX.Element {
+  return (
+    <div className="container">
+      <ShoppingCart size={24} />
+      <span>Cart items</span>
+    </div>
+  );
+}
+```
+
+---
+
+## 3. Quick checklist
+
+Before presenting generated `.tsx` to the user, verify:
+
+- [ ] All UI text in sentence case (no ALL-CAPS, no system-style placeholders)?
+- [ ] All icons imported from `@phosphor-icons/react`?
+- [ ] Icon sizes between 16px and 48px (24px default)?
+- [ ] Icon weights consistent within the component?
+
+For CSS verification (tokens, fonts, spacing, responsive), see [code-templates-and-patterns.md](code-templates-and-patterns.md) §"Design system rules baked into this template".

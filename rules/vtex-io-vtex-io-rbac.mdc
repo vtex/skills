@@ -1,0 +1,262 @@
+---
+description: "Apply when controlling access to VTEX IO app resources using role-based or resource-based policies. Covers policies.json for role-based access control, service.json policies for resource-based access, VRN syntax for principals, the difference between app-to-app and user/integration access, and GraphQL @auth directives. Use when deciding how to secure routes and restrict which apps, users, or integrations can access your endpoints."
+globs: "**/policies.json","**/service.json","**/*.graphql"
+alwaysApply: false
+---
+
+# VTEX IO access control (RBAC)
+
+## When this skill applies
+
+Use this skill when you need to **control who can access** your VTEX IO app's routes and resources:
+
+- Deciding between **role-based** (`policies.json`) and **resource-based** (`service.json` policies) access control
+- Securing **REST endpoints** so only specific apps, users, or API keys can call them
+- Setting up **GraphQL authorization** with the `@auth` directive
+- Understanding **VRN** (VTEX Resource Name) syntax for declaring principals
+- Debugging **403 Forbidden** errors caused by missing or misconfigured policies
+
+Do not use this skill for:
+
+- General service architecture (use `vtex-io-service-apps`)
+- PCI compliance and payment security (use `payment-pci-security`)
+- Route prefix and CDN behavior (use `vtex-io-service-paths-and-cdn`)
+
+## Decision rules
+
+### Role-based vs resource-based policies
+
+|                            | Role-based (`policies.json`)                                            | Resource-based (`service.json` policies)                                   |
+| -------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Who can call?**          | Only other IO apps (by themselves or on behalf of other apps)           | Apps, users, and integrations (API keys)                                   |
+| **API types**              | GraphQL and REST                                                        | REST only                                                                  |
+| **How callers get access** | Must declare required policies in their `manifest.json`                 | No policy declaration needed; just call with auth token                    |
+| **Where configured**       | `policies.json` in app root                                             | `policies` array inside route definition in `service.json`                 |
+| **Use when**               | Exposing GraphQL endpoints; exposing REST endpoints for app-to-app only | Controlling access for users, API keys, or specific apps to REST endpoints |
+
+### Choosing the right approach
+
+- **GraphQL endpoints** → Use **role-based** policies (`policies.json`) **and/or** the **`@auth` directive** in the schema for user-level authorization.
+- **REST endpoint called only by other IO apps** → Use **role-based** policies (`policies.json`). Consuming apps must declare the policy in their `manifest.json`.
+- **REST endpoint called by users or API keys** → Use **resource-based** policies in `service.json`. Set the route as `"public": false` and define principals.
+- **Public REST endpoint (no auth)** → Set `"public": true` in `service.json`. No policies needed, but be aware this means **anyone** can call it.
+
+### VRN syntax
+
+VRNs (VTEX Resource Names) identify resources and principals:
+
+```text
+vrn:{service}:{region}:{account}:{workspace}:{path}
+```
+
+- **Apps**: `vrn:apps:*:*:*:app/{vendor}.{app-name}@{version}`
+- **Users**: `vrn:vtex.vtex-id:*:*:*:user/{email}`
+- **API keys**: `vrn:vtex.vtex-id:*:*:*:user/vtexappkey-{account}-{hash}`
+- **Wildcards**: `*` matches any value in a segment. `app/*` matches all apps. `user/*@gmail.com` matches all Gmail users.
+
+## Hard constraints
+
+### Constraint: Use resource-based policies when users or API keys need access
+
+Role-based policies only work for **app-to-app** communication. If users (admin or storefront) or integrations (API keys) need to call your endpoint, you **must** use resource-based policies in `service.json` with the route set to `"public": false`.
+
+**Why this matters** — Setting up a role-based policy for a route that users or API keys call results in 403 Forbidden for those callers, because role-based policies don't evaluate user/integration tokens.
+
+**Detection** — A private route that should be callable by admin users or external integrations, but only has `policies.json` configuration and no `policies` array in `service.json`.
+
+**Correct** — Resource-based policy in `service.json` for user/integration access.
+
+```json
+{
+  "routes": {
+    "orders": {
+      "path": "/_v/private/my-app/orders",
+      "public": false,
+      "policies": [
+        {
+          "effect": "allow",
+          "actions": ["GET", "POST"],
+          "principals": [
+            "vrn:vtex.vtex-id:*:*:*:user/*@mycompany.com",
+            "vrn:apps:*:*:*:app/partner.integration-app@*"
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+**Wrong** — Only `policies.json` for a route that users need.
+
+```json
+// policies.json — this only covers app-to-app, not users
+[
+  {
+    "name": "access-orders",
+    "statements": [
+      {
+        "effect": "allow",
+        "actions": ["GET"],
+        "resources": ["vrn:my-app:*:*:*:/_v/private/my-app/orders"]
+      }
+    ]
+  }
+]
+// Users calling this route still get 403
+```
+
+### Constraint: Deny policies take precedence over allow policies
+
+When resource-based policies have overlapping principals between an `allow` and a `deny` rule, the **deny** always wins. Be careful with wildcards in allow rules that intersect with specific deny rules.
+
+**Why this matters** — A broad `allow` for `app/*` combined with a specific `deny` for `app/vendor.bad-app@*` correctly blocks `bad-app`. But the reverse—a broad `deny` with a specific `allow`—blocks everything including what you wanted to allow.
+
+**Detection** — Multiple policy entries for the same route with conflicting effects and overlapping principals.
+
+**Correct** — Allow broadly, deny specifically.
+
+```json
+{
+  "policies": [
+    {
+      "effect": "allow",
+      "actions": ["POST"],
+      "principals": ["vrn:apps:*:*:*:app/*"]
+    },
+    {
+      "effect": "deny",
+      "actions": ["POST"],
+      "principals": ["vrn:apps:*:*:*:app/untrusted.app@*"]
+    }
+  ]
+}
+```
+
+**Wrong** — Deny broadly, try to allow specifically (the allow is overridden).
+
+```json
+{
+  "policies": [
+    {
+      "effect": "deny",
+      "actions": ["POST"],
+      "principals": ["vrn:apps:*:*:*:app/*"]
+    },
+    {
+      "effect": "allow",
+      "actions": ["POST"],
+      "principals": ["vrn:apps:*:*:*:app/trusted.app@*"]
+    }
+  ]
+}
+```
+
+## Preferred pattern
+
+### Role-based policy (`policies.json`)
+
+```json
+[
+  {
+    "name": "resolve-graphql",
+    "description": "Allows apps to resolve GraphQL requests",
+    "statements": [
+      {
+        "effect": "allow",
+        "actions": ["POST"],
+        "resources": [
+          "vrn:vtex.store-graphql:{{region}}:{{account}}:{{workspace}}:/_v/graphql"
+        ]
+      }
+    ]
+  }
+]
+```
+
+The consuming app declares the policy in its `manifest.json`:
+
+```json
+{
+  "policies": [
+    {
+      "name": "resolve-graphql"
+    }
+  ]
+}
+```
+
+### Resource-based policy for mixed access
+
+```json
+{
+  "routes": {
+    "webhook": {
+      "path": "/_v/private/my-app/webhook",
+      "public": false,
+      "policies": [
+        {
+          "effect": "allow",
+          "actions": ["POST"],
+          "principals": [
+            "vrn:apps:*:*:*:app/vtex.orders-broadcast@*",
+            "vrn:vtex.vtex-id:*:*:*:user/vtexappkey-myaccount-*"
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+### GraphQL `@auth` directive
+
+For GraphQL endpoints, use the `@auth` directive for user-level authorization:
+
+```graphql
+type Query {
+  orders: [Order] @auth(productCode: "10", resourceCode: "list-orders")
+  adminSettings: Settings
+    @auth(productCode: "10", resourceCode: "admin-settings")
+}
+
+type Mutation {
+  updateSettings(input: SettingsInput!): Settings
+    @auth(productCode: "10", resourceCode: "admin-settings")
+}
+```
+
+The `@auth` directive checks the caller's License Manager role for the specified `productCode` and `resourceCode`.
+
+## Common failure modes
+
+- **403 for users on role-based routes** — Route only has `policies.json`; users and API keys get 403 because role-based policies don't apply to them.
+- **Overly broad `public: true`** — Route set to public when it should be private. Anyone can call it without auth.
+- **Missing policy in consumer manifest** — App tries to call a role-based protected route but didn't declare the policy in its `manifest.json`. Results in 403.
+- **VRN typo** — Misspelled vendor, app name, or principal format in VRN. Silently fails to match, resulting in 403.
+- **Wildcard in deny** — Broad deny with `app/*` blocks all apps including trusted ones. Deny takes precedence.
+- **No `@auth` on GraphQL mutations** — Mutations that modify data accessible without role checks.
+
+## Review checklist
+
+- [ ] Is the access control type (role-based vs resource-based) correct for the callers (apps vs users/integrations)?
+- [ ] Are private routes set to `"public": false` with appropriate policies?
+- [ ] Are VRNs correctly formatted for the principal type (apps, users, API keys)?
+- [ ] Do consuming apps declare required role-based policies in their `manifest.json`?
+- [ ] Are deny rules used carefully (they override allow rules for intersecting principals)?
+- [ ] Do GraphQL mutations have `@auth` directives with correct `productCode` and `resourceCode`?
+- [ ] Are wildcard principals scoped as narrowly as possible?
+
+## Related skills
+
+- [vtex-io-service-apps](../vtex-io-service-apps/skill.md) — Service class, clients, and route configuration
+- [vtex-io-app-contract](../vtex-io-app-contract/skill.md) — Manifest, builders, and policy declarations
+- [vtex-io-graphql-api](../vtex-io-graphql-api/skill.md) — GraphQL schema and `@auth` directive details
+- [vtex-io-service-paths-and-cdn](../vtex-io-service-paths-and-cdn/skill.md) — Route prefix patterns
+
+## Reference
+
+- [Controlling Access to App Resources](https://developers.vtex.com/docs/guides/controlling-access-to-app-resources) — Role-based and resource-based policies, VRN syntax, principal types
+- [App Authentication Using Auth Tokens](https://developers.vtex.com/docs/guides/app-authentication-using-auth-tokens) — Auth token types for app-to-app and user-to-app communication
+- [GraphQL Authorization in IO Apps](https://developers.vtex.com/docs/guides/graphql-authorization-in-io-apps) — @auth directive usage
+- [VTEX IO VRN](https://developers.vtex.com/docs/guides/vtex-io-documentation-vrn) — VTEX Resource Name format and examples
