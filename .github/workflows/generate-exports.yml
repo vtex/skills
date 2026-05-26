@@ -16,7 +16,7 @@ on:
       - 'package.json'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate-and-export:
@@ -40,24 +40,19 @@ jobs:
         run: bun run export
 
       - name: Sync plugin directories
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           rm -f rules/*.mdc
           cp exports/cursor/*.mdc rules/
           rm -rf skills/
           cp -r exports/opencode/. skills/
 
-      - name: Check for changes
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        id: changes
+      - name: Check exports are up to date
         run: |
-          git diff --quiet exports/ rules/ skills/ || echo "changed=true" >> $GITHUB_OUTPUT
-
-      - name: Commit generated exports
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.changes.outputs.changed == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add exports/ rules/ skills/
-          git commit -m "chore: regenerate skill exports"
-          git push
+          if ! git diff --quiet exports/ rules/ skills/; then
+            echo ""
+            echo "❌ Exports are out of date. Run 'bun run export' locally and commit the result."
+            echo ""
+            git diff --stat exports/ rules/ skills/
+            exit 1
+          fi
+          echo "✅ Exports are up to date."
