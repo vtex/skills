@@ -56,12 +56,19 @@ app dependencies — e.g. `crypto-js`, `draft-js` — alongside these):
 {
   "@faststore/cli": "<published v4 release>",
   "@vtex/faststore-plugin-buyer-portal": "<published v4 release>",
-  "next": "^16.2.6",
+  "graphql": "^16.11.0",
   "react": "^18.2.0",
   "react-dom": "^18.2.0",
   "react-router-dom": "^6.24.1"
 }
 ```
+
+**Important:** do **not** declare `next` in `dependencies` — Next.js is now
+managed internally by `@faststore/cli`, and declaring it separately causes
+version conflicts. Also update `typescript` in `devDependencies` to `^5.9.3`.
+
+`graphql` must be declared explicitly because it is a `peerDependency` of
+`@faststore/cli` — yarn v1 does not install peer dependencies automatically.
 
 Root `package.json`: `@faststore/cli` (devDependency) +
 `@vtex/faststore-plugin-buyer-portal` (dependency).
@@ -315,8 +322,9 @@ script, and `rm -rf node_modules && yarn install` so no symlinks remain.
 
 - [ ] Node 24 (`volta.node`, `experimental.nodeVersion`).
 - [ ] `package.json` (root + discovery): `@faststore/cli` + plugin pinned to
-      published v4 releases; v3 transitive deps removed; `next ^16.2.6`,
-      `react-router-dom` added.
+      published v4 releases; v3 transitive deps removed; `next` **removed**
+      from dependencies (managed by cli); `graphql ^16.11.0` and
+      `react-router-dom ^6.24.1` added; `typescript ^5.9.3` in devDependencies.
 - [ ] `discovery.config.js`: no `path`/`dotenv` requires; no `webpack()`
       callback; `nodeVersion: 24`; `transpilePackages` if needed.
 - [ ] Every `.scss`: top-level `@import` → `@use`; nested `@import` kept;
