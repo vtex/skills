@@ -335,6 +335,11 @@ script, and `rm -rf node_modules && yarn install` so no symlinks remain.
       `patches/`.
 - [ ] `yarn build` and `yarn dev` verified (§8).
 - [ ] Local-linking machinery (§9) reverted before committing.
+- [ ] CMS type detected via `contentSource` in `discovery.config.js` (§11.1).
+- [ ] CMS sync run: `yarn cms-sync` (legacy) or `generate-schema` + `upload-schema` (CP) — §11.2 / §11.3.
+- [ ] New CMS fields configured in Admin → Storefront → Content and pages republished (§11.4 — human step).
+- [ ] Tested locally with `yarn dev` — no empty labels/buttons/toasts.
+- [ ] Only then: v4 deployed to production + Node.js v24 set in WebOps.
 
 ---
 
@@ -357,10 +362,30 @@ A table covering every file touched and the change applied:
 Adapt the table rows to what actually changed in the store being migrated.
 Mark items that were not applicable as `—`.
 
-### Optional next steps
+### Important next steps (do not block the build)
 
-Items that **do not block the build** but are worth addressing before going
+Items that **do not block the build** but must be addressed before going
 to production:
+
+- **Node.js v24 in WebOps** — For production, update the
+  runtime in VTEX Admin → **Storefront → FastStore WebOps → Settings →
+  Node.js version** → `v24`, then trigger a new deploy. Without this, the
+  WebOps build still runs on the previously configured Node version.
+
+- **CMS content review** — After the v4 deploy, new configurable fields
+  will appear blank until filled in. Review and republish the pages below
+  in **Admin → Storefront → Content**:
+
+  | Page | Sections with new fields |
+  |------|--------------------------|
+  | **All pages** | `Navbar` → `invalidQuantityToast`, `collapseSearchAriaLabel` |
+  | **Home** (if it has a product shelf) | `ProductCard` / `ProductCardContent` → `buttonLabel`, `outOfStockLabel`, `includeTaxesLabel`, `sponsoredLabel` |
+  | **PLP** (e.g. `/electronics`) | `Breadcrumb → Fallback label`, `ProductGallery → sortBySelector`, `Filter → FilterSlider / FilterDesktop labels`, `ProductCard / ProductCardContent` |
+  | **Search** (`/s?q=...`) | `SearchInput`, `SearchTop`, `SearchHistory`, `EmptyGallery → labels`, `ProductCard / ProductCardContent` |
+  | **PDP** (e.g. `/mouse/p`) | `Breadcrumb → Fallback label`, `ProductDetails → invalidQuantityToast / buyButtonTitle` |
+  | **Cart** | `EmptyCart → title / buttonLabel` |
+
+  Full field reference: [developers.vtex.com → Upgrading FastStore to v4 — Step 5: Update CMS content](https://developers.vtex.com/docs/guides/faststore/getting-started-upgrading-faststore-to-v4)
 
 - **Nested `@import` deprecation warnings (Sass)** — `@import` inside a
   selector block emits a Dart Sass deprecation warning (not an error). The
@@ -368,9 +393,101 @@ to production:
   the underlying components can be refactored to avoid importing
   `@faststore/ui` styles manually once the store moves to fully custom
   styling or the UI components expose a cleaner API.
-- **Node.js v24 in WebOps** — For production, update the
-  runtime in VTEX Admin → **Storefront → FastStore WebOps → Settings →
-  Node.js version** → `v24`, then trigger a new deploy. Without this, the
-  WebOps build still runs on the previously configured Node version.
 
-See the [official v4 upgrade guide](https://developers.vtex.com/docs/guides/faststore/getting-started-upgrading-faststore-to-v4) for more details.
+---
+
+## 11. CMS sync
+
+### 11.1 Detect CMS type
+
+**Always check `discovery.config.js` before deciding the CMS path.**
+
+```js
+// Content Platform (CP)
+contentSource: {
+  type: 'CP',
+},
+
+// Headless CMS (legacy) — no contentSource field at all
+```
+
+| Signal | CMS type |
+|--------|----------|
+| `contentSource: { type: 'CP' }` present | Content Platform |
+| `contentSource` absent | Headless CMS (legacy) |
+
+---
+
+### 11.2 Headless CMS (legacy) path
+
+**Run `yarn cms-sync`** — requires interactive browser login, so it must be
+run in the user's own terminal:
+
+```bash
+vtex login <accountName>   # authenticate first
+yarn cms-sync
+```
+
+`cms-sync` is safe to run while v3 is still live in production — it only
+pushes the schema; it does not affect page content or rendered output.
+
+> **Note:** `faststore cms-sync` internally calls `vtex cms sync` via the
+> `@vtex/cli-plugin-cms` plugin. If that plugin errors with
+> `Cannot find module 'vtex'`, the plugin's module resolution is broken
+> (common with Homebrew VTEX CLI installs). Fix with:
+> `vtex plugins install @vtex/cli-plugin-cms` or `vtex update`.
+
+---
+
+### 11.3 Content Platform (CP) path
+
+First check whether `cms/faststore/components/` already contains `.jsonc`
+files (already split) or the store is still using the legacy `sections.json`
+format:
+
+```
+contentSource.type === 'CP'
+├── cms/faststore/components/*.jsonc exists?
+│   ├── YES → already in new format → skip to generate-schema
+│   └── NO  → split first:
+│             vtex content split-components -i cms/faststore/sections.json \
+│                                           -o cms/faststore/components
+│             vtex content split-content-types \
+│                                           -i cms/faststore/content-types.json \
+│                                           -s cms/faststore/sections.json \
+│                                           -o cms/faststore/pages
+└── then generate + upload:
+      vtex content generate-schema cms/faststore/components cms/faststore/pages \
+                                   -o cms/faststore/schema.json
+      vtex content upload-schema cms/faststore/schema.json
+```
+
+---
+
+### 11.4 Safe deploy order
+
+**Do not deploy v4 to production until all CMS fields are configured and
+tested locally.** The schema sync is safe to run while v3 is live, but
+deploying v4 before filling the new fields causes empty UI (labels, buttons,
+toasts render blank).
+
+Correct order:
+
+1. Run the CMS sync (§11.2 or §11.3) — safe while v3 is live
+2. Fill in all new configurable fields in **Admin → Storefront → Content**
+   (human step — values are store-specific):
+   - `Breadcrumb` → `Fallback label`
+   - `ProductGallery` → `sortBySelector` (sort option labels)
+   - `Navbar` → `invalidQuantityToast`, `collapseSearchAriaLabel`
+   - `ProductDetails` → `invalidQuantityToast`, `buyButtonTitle`
+   - `EmptyCart` → `title`, `buttonLabel`
+   - `ProductCard` / `ProductCardContent` → `buttonLabel`, `outOfStockLabel`,
+     `includeTaxesLabel`, `sponsoredLabel`
+   - `EmptyGallery`, `SearchInput`, `SearchTop`, `SearchHistory` → labels
+   - `Filter` → `FilterSlider`, `FilterDesktop` labels
+3. Republish the affected pages
+4. Test locally with `yarn dev` pointing to the account — verify nothing
+   renders empty
+5. Deploy v4 to production
+6. Update Node.js v24 in WebOps (Admin → Storefront → FastStore WebOps →
+   Settings → Node.js version → `v24`)
