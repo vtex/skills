@@ -73,6 +73,17 @@ version conflicts. Also update `typescript` in `devDependencies` to `^5.9.3`.
 Root `package.json`: `@faststore/cli` (devDependency) +
 `@vtex/faststore-plugin-buyer-portal` (dependency).
 
+**Monorepo stores only:** add `@inquirer/type` to the `resolutions` field in
+the root `package.json` to avoid version conflicts with the `inquirer` package:
+
+```json
+{
+  "resolutions": {
+    "@inquirer/type": "^1.5.5"
+  }
+}
+```
+
 **Pin npm releases, not pkg.pr.new / pkg.csb.dev tarballs.** The faststore v4
 monorepo uses pnpm `catalog:` / `workspace:*` specs. `npm publish` (via
 `pnpm publish`) resolves these to concrete versions, so npm releases install
@@ -208,7 +219,32 @@ partial actually contributes CSS/members before keeping it.
 
 ---
 
-## 5. v3 patches
+## 5. GraphQL import migration
+
+`@faststore/graphql-utils` is **deprecated** in v4. The `gql` tag used for
+GraphQL documents must be imported from `@faststore/core/api` instead.
+
+Search for all usages in `src/`:
+
+```bash
+grep -r "faststore/graphql-utils" src/
+```
+
+Replace every occurrence:
+
+```ts
+// before
+import { gql } from '@faststore/graphql-utils'
+
+// after
+import { gql } from '@faststore/core/api'
+```
+
+If the grep returns no matches, skip this step.
+
+---
+
+## 6. v3 patches
 
 `patch-package` patches are version-tagged (`@faststore+core+<v3>.patch`) and
 will not apply to v4. Inspect each:
