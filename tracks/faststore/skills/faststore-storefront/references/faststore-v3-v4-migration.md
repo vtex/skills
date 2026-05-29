@@ -335,3 +335,42 @@ script, and `rm -rf node_modules && yarn install` so no symlinks remain.
       `patches/`.
 - [ ] `yarn build` and `yarn dev` verified (§8).
 - [ ] Local-linking machinery (§9) reverted before committing.
+
+---
+
+## 10. Post-migration summary (mandatory output)
+
+After completing all migration steps, **always display a structured summary**
+with two sections:
+
+### What was done
+
+A table covering every file touched and the change applied:
+
+| File | Change | Status |
+|------|--------|--------|
+| `package.json` | `@faststore/cli` bumped to v4; `next` removed; `graphql`, `react-router-dom` added; `typescript` bumped to `^5.9.3`; `volta.node` set to `24.x` | ✅ Done |
+| `discovery.config.js` | `experimental.nodeVersion` → `24` | ✅ Done |
+| `src/**/*.scss` | Top-level `@import` → `@use`; `@include media/layout-content` namespaced to `u.*` | ✅ Done |
+| `patches/` | Stale v3 patches assessed / moved | ✅ Done / N/A |
+
+Adapt the table rows to what actually changed in the store being migrated.
+Mark items that were not applicable as `—`.
+
+### Optional next steps
+
+Items that **do not block the build** but are worth addressing before going
+to production:
+
+- **Nested `@import` deprecation warnings (Sass)** — `@import` inside a
+  selector block emits a Dart Sass deprecation warning (not an error). The
+  imports must stay nested to preserve CSS Modules purity (see §4.3), but
+  the underlying components can be refactored to avoid importing
+  `@faststore/ui` styles manually once the store moves to fully custom
+  styling or the UI components expose a cleaner API.
+- **Node.js v24 in WebOps** — For production, update the
+  runtime in VTEX Admin → **Storefront → FastStore WebOps → Settings →
+  Node.js version** → `v24`, then trigger a new deploy. Without this, the
+  WebOps build still runs on the previously configured Node version.
+
+See the [official v4 upgrade guide](https://developers.vtex.com/docs/guides/faststore/getting-started-upgrading-faststore-to-v4) for more details.
