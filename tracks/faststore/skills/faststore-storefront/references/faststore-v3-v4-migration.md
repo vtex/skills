@@ -38,7 +38,7 @@ FastStore v4's dependency tree (e.g. `eslint-visitor-keys@5`) declares
 older Node (e.g. 20.12) fails with `Found incompatible module`.
 
 - Use Node 24 for install, build and dev.
-- Set `volta.node` to `"24"` in `packages/discovery/package.json`.
+- Set `volta.node` to `"24.0.2"` (or the latest Node 24 patch) in `packages/discovery/package.json`.
 - Set `experimental.nodeVersion: 24` in `discovery.config.js`.
 
 ---
@@ -320,7 +320,7 @@ script, and `rm -rf node_modules && yarn install` so no symlinks remain.
 
 ## Appendix — migration checklist
 
-- [ ] Node 24 (`volta.node`, `experimental.nodeVersion`).
+- [ ] Node 24 (`volta.node` must be a full semver e.g. "24.0.2", `experimental.nodeVersion: 24`).
 - [ ] `package.json` (root + discovery): `@faststore/cli` + plugin pinned to
       published v4 releases; v3 transitive deps removed; `next` **removed**
       from dependencies (managed by cli); `graphql ^16.11.0` and
