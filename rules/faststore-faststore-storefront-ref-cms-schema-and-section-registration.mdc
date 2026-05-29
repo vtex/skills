@@ -231,7 +231,7 @@ Follow this EXACT sequence. Do NOT skip steps.
 
 ### Phase 4: Schema Management (SAME SESSION)
 
-- [ ] Generate: `vtex content generate-schema -o cms/faststore/schema.json -b vtex.faststore4`
+- [ ] Generate: `vtex content generate-schema -o cms/faststore/schema.json  `
 - [ ] Verify: `grep -A 5 '"<ComponentName>"' cms/faststore/schema.json` (search for the `$componentKey` string)
   - If it does not appear, fix JSONC or registration — **do not** edit `schema.json` manually
 - [ ] **Account check** (before upload): read `api.storeId` from `discovery.config.js` and run `vtex whoami` — confirm both match. If they differ, ask the user to run `vtex login <correct-account>` and **stop**.
@@ -290,7 +290,7 @@ From the **project root**:
 1. **Generate** (canonical command — matches the storefront skill):
 
 ```bash
-vtex content generate-schema -o cms/faststore/schema.json -b vtex.faststore4
+vtex content generate-schema -o cms/faststore/schema.json  
 ```
 
 2. **Validate** — for new or renamed sections, grep or read `cms/faststore/schema.json` and confirm the `"$componentKey"` is present.
