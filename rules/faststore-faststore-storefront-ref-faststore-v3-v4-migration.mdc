@@ -44,7 +44,7 @@ FastStore v4's dependency tree (e.g. `eslint-visitor-keys@5`) declares
 older Node (e.g. 20.12) fails with `Found incompatible module`.
 
 - Use Node 24 for install, build and dev.
-- Set `volta.node` to `"24"` in `packages/discovery/package.json`.
+- Set `volta.node` to `"24.0.2"` (or the latest Node 24 patch) in `packages/discovery/package.json`.
 - Set `experimental.nodeVersion: 24` in `discovery.config.js`.
 
 ---
@@ -62,15 +62,33 @@ app dependencies — e.g. `crypto-js`, `draft-js` — alongside these):
 {
   "@faststore/cli": "<published v4 release>",
   "@vtex/faststore-plugin-buyer-portal": "<published v4 release>",
-  "next": "^16.2.6",
+  "graphql": "^16.11.0",
   "react": "^18.2.0",
   "react-dom": "^18.2.0",
   "react-router-dom": "^6.24.1"
 }
 ```
 
+**Important:** do **not** declare `next` in `dependencies` — Next.js is now
+managed internally by `@faststore/cli`, and declaring it separately causes
+version conflicts. Also update `typescript` in `devDependencies` to `^5.9.3`.
+
+`graphql` must be declared explicitly because it is a `peerDependency` of
+`@faststore/cli` — yarn v1 does not install peer dependencies automatically.
+
 Root `package.json`: `@faststore/cli` (devDependency) +
 `@vtex/faststore-plugin-buyer-portal` (dependency).
+
+**Monorepo stores only:** add `@inquirer/type` to the `resolutions` field in
+the root `package.json` to avoid version conflicts with the `inquirer` package:
+
+```json
+{
+  "resolutions": {
+    "@inquirer/type": "^1.5.5"
+  }
+}
+```
 
 **Pin npm releases, not pkg.pr.new / pkg.csb.dev tarballs.** The faststore v4
 monorepo uses pnpm `catalog:` / `workspace:*` specs. `npm publish` (via
@@ -207,7 +225,32 @@ partial actually contributes CSS/members before keeping it.
 
 ---
 
-## 5. v3 patches
+## 5. GraphQL import migration
+
+`@faststore/graphql-utils` is **deprecated** in v4. The `gql` tag used for
+GraphQL documents must be imported from `@faststore/core/api` instead.
+
+Search for all usages in `src/`:
+
+```bash
+grep -r "faststore/graphql-utils" src/
+```
+
+Replace every occurrence:
+
+```ts
+// before
+import { gql } from '@faststore/graphql-utils'
+
+// after
+import { gql } from '@faststore/core/api'
+```
+
+If the grep returns no matches, skip this step.
+
+---
+
+## 6. v3 patches
 
 `patch-package` patches are version-tagged (`@faststore+core+<v3>.patch`) and
 will not apply to v4. Inspect each:
@@ -319,10 +362,11 @@ script, and `rm -rf node_modules && yarn install` so no symlinks remain.
 
 ## Appendix — migration checklist
 
-- [ ] Node 24 (`volta.node`, `experimental.nodeVersion`).
+- [ ] Node 24 (`volta.node` must be a full semver e.g. "24.0.2", `experimental.nodeVersion: 24`).
 - [ ] `package.json` (root + discovery): `@faststore/cli` + plugin pinned to
-      published v4 releases; v3 transitive deps removed; `next ^16.2.6`,
-      `react-router-dom` added.
+      published v4 releases; v3 transitive deps removed; `next` **removed**
+      from dependencies (managed by cli); `graphql ^16.11.0` and
+      `react-router-dom ^6.24.1` added; `typescript ^5.9.3` in devDependencies.
 - [ ] `discovery.config.js`: no `path`/`dotenv` requires; no `webpack()`
       callback; `nodeVersion: 24`; `transpilePackages` if needed.
 - [ ] Every `.scss`: top-level `@import` → `@use`; nested `@import` kept;
@@ -333,3 +377,162 @@ script, and `rm -rf node_modules && yarn install` so no symlinks remain.
       `patches/`.
 - [ ] `yarn build` and `yarn dev` verified (§8).
 - [ ] Local-linking machinery (§9) reverted before committing.
+- [ ] CMS type detected via `contentSource` in `discovery.config.js` (§11.1).
+- [ ] CMS sync instructions shown to user (§10 next steps): case detected from `discovery.config.js` + `cms/faststore/`; commands presented for manual execution (never run automatically).
+- [ ] New CMS fields configured in Admin → Storefront → Headless CMS / Content and pages republished (§11.4 — human step).
+- [ ] Tested locally with `yarn dev` — no empty labels/buttons/toasts.
+- [ ] Only then: v4 deployed to production + Node.js v24 set in WebOps.
+
+---
+
+## 10. Post-migration summary (mandatory output)
+
+> **MANDATORY prerequisite — do NOT display this summary until `yarn build`
+> passes.**
+>
+> Before showing the summary, run (using Node 24):
+> ```bash
+> yarn install
+> yarn build
+> ```
+> Fix any build errors first. Only after a successful build should you
+> proceed to display the summary below.
+
+After the build passes, display the following two sections.
+
+---
+
+### What was done
+
+A table covering every file touched and the change applied. Adapt rows to
+what actually changed; mark items that were not applicable as `—`.
+
+| File | Change | Status |
+|------|--------|--------|
+| `package.json` | `@faststore/cli` bumped to v4; `next` removed; `graphql`, `react-router-dom` added; `typescript` bumped to `^5.9.3`; `volta.node` set to `24` | ✅ Done |
+| `discovery.config.js` | `experimental.nodeVersion` → `24` | ✅ Done |
+| `src/**/*.scss` | Top-level `@import` → `@use`; `@include media/layout-content` namespaced to `u.*` | ✅ Done |
+| `patches/` | Stale v3 patches assessed / moved | ✅ Done / N/A |
+
+---
+
+### Important next steps
+
+#### 1. CMS sync (run manually in your terminal)
+
+> **Do NOT run `vtex content` commands automatically.** These require
+> interactive authentication and may have CLI plugin issues in Homebrew
+> environments.
+
+Check `discovery.config.js` and `cms/faststore/` to identify the case,
+then present the matching instructions to the user.
+
+**Headless CMS (legacy)** — `contentSource` field absent in `discovery.config.js`:
+
+```bash
+vtex login <accountName>
+yarn cms-sync
+```
+
+> If `cms-sync` errors with `Cannot find module 'vtex'`, run
+> `vtex plugins install @vtex/cli-plugin-cms` or `vtex update`.
+
+**Content Platform (CP)** — `contentSource: { type: 'CP' }` present.
+Identify the sub-case by inspecting `cms/faststore/`:
+
+| Case | Signal | Commands to run |
+|------|--------|-----------------|
+| **A** — no custom schemas | No `.jsonc` files, no `components/` folder | Create `cms/faststore/schema.json` with `{ "$base": "vtex.faststore" }`, then `vtex content upload-schema cms/faststore/schema.json` |
+| **B** — already split | `cms/faststore/components/*.jsonc` exists | `vtex content generate-schema cms/faststore/components cms/faststore/pages -o cms/faststore/schema.json` then `vtex content upload-schema cms/faststore/schema.json` |
+| **C** — legacy format | Only `sections.json` / `content-types.json` | Split first (see §11), then generate + upload |
+
+For the full command listing of each case see §11.
+
+---
+
+#### 2. Fill in new CMS fields and republish
+
+After the CMS sync, v4 exposes new configurable fields that were previously
+hardcoded. Configure them in **Admin → Storefront → Headless CMS / Content**
+and republish the affected pages:
+
+| Page | Fields to configure |
+|------|---------------------|
+| **All pages** | `Navbar` → `invalidQuantityToast`, `collapseSearchAriaLabel` |
+| **Home** (product shelf) | `ProductCard` / `ProductCardContent` → `buttonLabel`, `outOfStockLabel`, `includeTaxesLabel`, `sponsoredLabel` |
+| **PLP** | `Breadcrumb → Fallback label`, `ProductGallery → sortBySelector`, `Filter → FilterSlider / FilterDesktop labels`, `ProductCard / ProductCardContent` |
+| **Search** | `SearchInput`, `SearchTop`, `SearchHistory`, `EmptyGallery → labels`, `ProductCard / ProductCardContent` |
+| **PDP** | `Breadcrumb → Fallback label`, `ProductDetails → invalidQuantityToast / buyButtonTitle` |
+| **Cart** | `EmptyCart → title / buttonLabel` |
+
+Full field reference: [developers.vtex.com → Upgrading FastStore to v4](https://developers.vtex.com/docs/guides/faststore/getting-started-upgrading-faststore-to-v4)
+
+> Do not deploy v4 to production before filling these fields — they render
+> blank until configured.
+
+---
+
+#### 3. Update Node.js v24 in WebOps
+
+In VTEX Admin → **Storefront → FastStore WebOps → Settings → Node.js
+version** → set to `v24` → Save → trigger a new deploy.
+
+---
+
+#### 4. Check Sass `@import` deprecation warnings
+
+`@import` inside selector blocks emits Dart Sass deprecation warnings.
+
+---
+
+## 11. CMS sync — command reference
+
+This section is a command reference. The agent must **not** run these
+commands automatically — always present them to the user to run manually.
+
+### 11.1 Headless CMS (legacy)
+
+```bash
+vtex login <accountName>
+yarn cms-sync
+```
+
+`cms-sync` is safe while v3 is live — it only pushes the schema.
+
+### 11.2 Content Platform — Case A (no custom schemas)
+
+```bash
+# 1. Create the minimal schema (if not already present)
+# cms/faststore/schema.json content:
+# { "$base": "vtex.faststore" }
+# (use "vtex.faststore@4.1.0" to pin an explicit version)
+
+vtex login <accountName>
+vtex content upload-schema cms/faststore/schema.json
+# The local schema.json can be deleted after upload
+```
+
+### 11.3 Content Platform — Case B (components already in .jsonc format)
+
+```bash
+vtex login <accountName>
+vtex content generate-schema cms/faststore/components cms/faststore/pages \
+                             -o cms/faststore/schema.json
+vtex content upload-schema cms/faststore/schema.json
+```
+
+### 11.4 Content Platform — Case C (legacy sections.json)
+
+```bash
+vtex login <accountName>
+
+vtex content split-components -i cms/faststore/sections.json \
+                              -o cms/faststore/components
+vtex content split-content-types -i cms/faststore/content-types.json \
+                                 -s cms/faststore/sections.json \
+                                 -o cms/faststore/pages
+
+vtex content generate-schema cms/faststore/components cms/faststore/pages \
+                             -o cms/faststore/schema.json
+vtex content upload-schema cms/faststore/schema.json
+```
