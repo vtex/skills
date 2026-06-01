@@ -111,7 +111,7 @@ After **every** change to `cms/faststore/components/*.jsonc` or `cms/faststore/p
 
 1. **Generate** — from the project root, run:
    ```bash
-   vtex content generate-schema -o cms/faststore/schema.json -b vtex.faststore4
+   vtex content generate-schema -o cms/faststore/schema.json  
    ```
 
 2. **Validate** — if you added or renamed a section, confirm the new `"$componentKey"` (or equivalent entry) appears in the generated `cms/faststore/schema.json`. If it is missing, fix the JSONC or registration in `src/components/index.tsx` and regenerate — **never** patch `schema.json` manually.
@@ -129,7 +129,7 @@ After **every** change to `cms/faststore/components/*.jsonc` or `cms/faststore/p
 Canonical commands (project root):
 
 ```bash
-vtex content generate-schema -o cms/faststore/schema.json -b vtex.faststore4
+vtex content generate-schema -o cms/faststore/schema.json  
 vtex content upload-schema cms/faststore/schema.json
 ```
 
