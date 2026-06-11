@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.11.0](https://github.com/vtex/skills/compare/v1.10.0...v1.11.0) (2026-06-11)
+
+
+### Features
+
+* **sales-app:** add design guidelines to sales-app-extensibility skill ([d57f4ca](https://github.com/vtex/skills/commit/d57f4ca33c638a84faf69920dbc832258987dc59))
+* **sales-app:** add static analysis to sales-app-extensibility skill ([5506814](https://github.com/vtex/skills/commit/55068140816470cde5e273fa8dd3b2da49a0eec4))
+* **sales-app:** add static analysis to sales-app-extensibility skill ([9621cee](https://github.com/vtex/skills/commit/9621ceede5b0bfb859b9398be2c08299fecf46c2))
+* update faststore-v3-v4-migration ([e54249c](https://github.com/vtex/skills/commit/e54249cec671e4622480f43a8837ce03560a66b6))
+* **vtex-io:** add rootpath and rbac skills; enrich performance, session, and masterdata ([4b9df7b](https://github.com/vtex/skills/commit/4b9df7bc6fa1033954eeb42babf6121fda1acdd8))
+* **vtex-io:** add storefront theme app and theme versioning skills ([807a175](https://github.com/vtex/skills/commit/807a1751007599caebdb43fe73f8df23a048047d))
+* **vtex-io:** add storefront theme app and theme versioning skills ([86d7bbd](https://github.com/vtex/skills/commit/86d7bbd11262040587fc58ce19b29b12e3fbed5f))
+
+
+### Bug Fixes
+
+* **ci:** replace auto-commit with stale-export check ([9fdb183](https://github.com/vtex/skills/commit/9fdb183c751b2ac70462d88899dc17495f8860cb))
+* **ci:** unblock Generate Skill Exports by using default GITHUB_TOKEN for checkout ([a3a4175](https://github.com/vtex/skills/commit/a3a417523d3c8e16d99be42c7be81e7c4d1ba0a1))
+* **ci:** use default GITHUB_TOKEN for generate-exports checkout ([a3a4175](https://github.com/vtex/skills/commit/a3a417523d3c8e16d99be42c7be81e7c4d1ba0a1))
+* **ci:** use default GITHUB_TOKEN for generate-exports checkout ([a3007bc](https://github.com/vtex/skills/commit/a3007bcc93e67617f044f1df78902eff4bdab2d4))
+* **headless,payment:** require card data to go directly to vtexpayments.com.br ([ba53719](https://github.com/vtex/skills/commit/ba53719d9a623d77814989ec68664f0d1ece6fcd))
+* **headless,payment:** require card data to go directly to vtexpayments.com.br ([69f0005](https://github.com/vtex/skills/commit/69f000588102b06e5a9da40aa26efc05d79029e4))
+* **headless:** pass orderGroup through request body, not req.session ([43138f4](https://github.com/vtex/skills/commit/43138f4a994d92affed50ef24337c83350ea547e))
+* move migration reference to tracks/ source and regenerate exports ([27f0633](https://github.com/vtex/skills/commit/27f06337053db7fcd559f13a1140ed65f5c26afe))
+* node version detail ([3700c39](https://github.com/vtex/skills/commit/3700c399089504d471ef5775c7ed5690ed2e0f9b))
+* removes schema base form generate command ([56ec115](https://github.com/vtex/skills/commit/56ec115a0bf4e47b5a43157efcc844f9e9aeade3))
+* **sales-app:** creating plain css style at sales-app-extensibility skill ([a26d95b](https://github.com/vtex/skills/commit/a26d95bf3312f181588cdc63802f3b0f40486f23))
+* **sales-app:** streamlining the skill, fixing pr reviews and optimizing static analysis rules ([c07c8a0](https://github.com/vtex/skills/commit/c07c8a05862e5ccf9694756464282ea50f6dfed2))
+
 ## [1.10.0](https://github.com/vtex/skills/compare/v1.9.1...v1.10.0) (2026-05-05)
 
 
