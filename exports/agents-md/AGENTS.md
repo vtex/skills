@@ -24,6 +24,13 @@ See [`headless/AGENTS.md`](./headless/AGENTS.md) for detailed instructions.
   - **headless-checkout-proxy**: Apply when implementing cart, checkout, or order placement logic proxied through a BFF for headless VTEX storefronts. Covers OrderForm lifecycle, cart creation, item management, profile/shipping/payment attachments, orderFormId management, and secure checkout flows. Use for any headless frontend that needs to proxy VTEX Checkout API calls through a server-side layer with proper session cookie handling.
   - **headless-intelligent-search**: Apply when implementing search functionality, faceted navigation, or autocomplete in a headless VTEX storefront. Covers product_search, autocomplete_suggestions, facets, banners, correction_search, and top_searches endpoints, plus analytics event collection. Use for any custom frontend that integrates VTEX Intelligent Search API for product discovery and search result rendering.
 
+## known-issues
+
+See [`known-issues/AGENTS.md`](./known-issues/AGENTS.md) for detailed instructions.
+
+  - **ki-check**: Apply when checking whether the current repository or a given product area has open Known Issues (KIs) registered in Zendesk with tag:ki. Covers auto-detecting the app from git context or manifest.json, looking up a specific ticket by ID, and listing all open KIs for a product area ranked by fix complexity. Use before starting implementation work, during support triage, or when a customer reports a bug that may already be a tracked KI.
+  - **ki-specify**: Apply when generating a Software Design Document (SDD) specification for a VTEX Known Issue ticket. Covers loading the KI details by Zendesk ticket ID, detecting whether the current repository has SDD infrastructure in place, generating a structured specification with problem statement, root cause, proposed solution, implementation plan, testing strategy, and rollout plan, and optionally opening a GitHub Pull Request with the resulting document.
+
 ## Marketplace Integration
 
 See [`marketplace/AGENTS.md`](./marketplace/AGENTS.md) for detailed instructions.

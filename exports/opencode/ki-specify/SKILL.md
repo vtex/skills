@@ -1,0 +1,270 @@
+---
+name: ki-specify
+description: "Apply when generating a Software Design Document (SDD) specification for a VTEX Known Issue ticket. Covers loading the KI details by Zendesk ticket ID, detecting whether the current repository has SDD infrastructure in place, generating a structured specification with problem statement, root cause, proposed solution, implementation plan, testing strategy, and rollout plan, and optionally opening a GitHub Pull Request with the resulting document."
+---
+
+# KI Specify — SDD Generator for Known Issues
+
+## When this skill applies
+
+Use this skill when the user wants to convert a Known Issue ticket into a specification document (SDD)
+that can be reviewed, approved, and tracked as a PR before implementation begins.
+
+- User runs `/ki-specify <ticket_id>` → load the KI, detect the repo, generate and save the SDD
+- If the GitHub MCP connector is available → also create a branch and open a draft PR
+- If the repo has no SDD infrastructure → scaffold `docs/specs/` automatically
+
+Do not use this skill for:
+- Looking up KIs without intent to produce a spec (use `ki-check` instead)
+- Implementing the fix described in the KI
+- Creating or updating the Zendesk ticket itself
+
+## Decision rules
+
+- Require a numeric ticket ID argument. If missing, ask: "Which KI ticket should I create a spec for? Run `/ki-specify <ticket_id>`."
+- Load ticket details from `ki-index.json`. If not found → report and link to the Zendesk URL directly.
+- Check for SDD readiness before writing: look for `docs/specs/`, `.vtex/sdd.yaml`, or a PR template mentioning "spec".
+- If no SDD infrastructure exists → scaffold `docs/specs/` and a `docs/README.md` without asking.
+- Write the SDD to `docs/specs/ki-<ticket_id>.md`.
+- If the GitHub MCP connector is connected → create branch `ki/<ticket_id>-spec` and open a draft PR.
+- If GitHub MCP is not connected → save locally and instruct the user to push manually.
+
+## Hard constraints
+
+### Constraint: Load ticket details from ki-index.json, not from ki-product-map.json
+
+`ki-product-map.json` contains only the minimal fields needed for listing (id, subject, complexity, status).
+The SDD requires the full description excerpt and capability tags, which are only in `ki-index.json`.
+
+**Why this matters**
+
+Using only the product map produces a spec with an empty problem statement, which is unusable for
+engineering review.
+
+**Detection**
+
+If you see the SDD problem statement section filled only with the ticket subject and no description →
+the skill loaded from the wrong file. Load `ki-index.json` for SDD generation.
+
+**Correct**
+
+```python
+import json
+
+def load_ki(ticket_id: int) -> dict | None:
+    # ki-index.json has the full desc and capability_tags fields
+    with open("tracks/known-issues/data/ki-index.json") as f:
+        ki_index = json.load(f)
+    return next((k for k in ki_index if k["id"] == ticket_id), None)
+
+ki = load_ki(759842)
+# ki["desc"]             → 400-char description excerpt
+# ki["capability_tags"]  → ["commerce_capabilities_checkout_api_tax_service"]
+# ki["complexity"]       → "high"
+# ki["has_workaround"]   → False
+```
+
+**Wrong**
+
+```python
+import json
+
+# WRONG: product map has no desc or capability_tags
+with open("tracks/known-issues/data/ki-product-map.json") as f:
+    pm = json.load(f)
+
+# All area ticket entries only have: id, subject, complexity, fix_effort, status, has_workaround, url
+# "desc" and "capability_tags" are missing — problem statement will be empty
+```
+
+---
+
+### Constraint: Mark all engineer-required sections explicitly in the SDD
+
+The generated SDD must clearly mark sections that require engineer input with a `⚠️` prefix and an
+HTML comment prompt. Sections left blank without markers will be approved as-is and create silent gaps
+in the implementation.
+
+**Why this matters**
+
+A spec that looks complete but has empty root cause or solution sections will be merged without the
+critical engineering decisions that the SDD is meant to capture.
+
+**Detection**
+
+If you see SDD sections like "Root Cause Analysis" or "Proposed Solution" with no content and no
+`⚠️` marker → warn and add the marker with a prompt comment.
+
+**Correct**
+
+```markdown
+## 2. Root Cause Analysis
+
+> ⚠️ This section must be completed by the engineer assigned to the fix.
+
+**Hypothesis:**
+<!-- What do we believe is causing this behavior? -->
+
+**Affected Components:**
+- commerce_capabilities_checkout_api_tax_service
+```
+
+**Wrong**
+
+```markdown
+## 2. Root Cause Analysis
+
+(to be filled)
+```
+
+---
+
+### Constraint: Branch name must follow the ki/<id>-spec pattern
+
+When creating a GitHub branch for the SDD PR, the branch name must be `ki/<ticket_id>-spec`.
+Free-form branch names make it impossible to correlate the branch to the KI ticket programmatically.
+
+**Why this matters**
+
+The branch naming convention allows automated tooling (e.g., the KI update pipeline) to detect which
+branches contain SDD drafts and avoid overwriting them during index regeneration.
+
+**Detection**
+
+If you see a branch name that does not match `ki/[0-9]+-spec` → warn and use the correct pattern.
+
+**Correct**
+
+```text
+branch: ki/759842-spec
+commit: docs: add SDD spec for KI #759842 — Checkout pipeline doesn't update taxes
+```
+
+**Wrong**
+
+```text
+branch: fix/checkout-taxes
+branch: sdd-759842
+branch: wender/ki-spec
+```
+
+## Preferred pattern
+
+### SDD document structure
+
+```markdown
+# [KI-{id}] {subject}
+
+> **Zendesk:** {url}
+> **Status:** {status} | **Complexity:** {complexity} | **Fix Effort:** {fix_effort}
+> **Workaround Available:** {has_workaround}
+> **Product Areas:** {product_areas}
+
+---
+
+## 1. Problem Statement
+
+{desc}
+
+## 2. Root Cause Analysis
+
+> ⚠️ Must be completed by the assigned engineer.
+
+**Hypothesis:**
+<!-- What do we believe is causing this behavior? -->
+
+**Affected Components:**
+{capability_tags}
+
+## 3. Proposed Solution
+
+> ⚠️ Must be reviewed and approved before implementation begins.
+
+**Approach:**
+<!-- High-level description of the fix -->
+
+**Breaking Changes:**
+- [ ] None expected
+- [ ] API contract changes
+- [ ] Data migration required
+
+## 4. Implementation Plan
+
+| Step | Description | Owner | ETA |
+|---|---|---|---|
+| 1 | Reproduce in staging | | |
+| 2 | Implement fix | | |
+| 3 | Unit + integration tests | | |
+| 4 | QA validation | | |
+| 5 | Deploy to production | | |
+
+## 5. Testing Strategy
+
+- [ ] Unit tests covering the affected capability
+- [ ] Regression: existing behavior not broken
+- [ ] Manual QA: reproduce original bug → confirm resolved
+
+## 6. Rollout Plan
+
+- [ ] Direct deploy (low risk)
+- [ ] Feature flag (moderate/high risk) — flag name: `ki-{id}-fix`
+- [ ] Gradual rollout (very high complexity)
+
+## 7. Communication
+
+**Customer-facing?** {is_public}
+**Zendesk ticket to close:** `{id}` — `{url}`
+
+---
+*SDD generated by `/ki-specify` on {date}. Complete sections marked ⚠️ before requesting review.*
+```
+
+### SDD readiness detection
+
+```bash
+# Check for existing SDD infrastructure
+ls docs/specs/ 2>/dev/null \
+  || ls .vtex/sdd.yaml 2>/dev/null \
+  || grep -l "spec\|SDD" .github/PULL_REQUEST_TEMPLATE*.md 2>/dev/null \
+  || echo "not-ready"
+```
+
+If not ready, scaffold:
+
+```bash
+mkdir -p docs/specs
+cat > docs/README.md << 'EOF'
+# docs/
+
+This directory contains Software Design Documents (SDDs) for Known Issues and feature work.
+
+## SDDs
+
+SDDs live in `docs/specs/` and follow the naming convention `ki-<ticket_id>.md`.
+EOF
+```
+
+## Common failure modes
+
+- **Using ki-product-map.json for SDD generation.** It lacks `desc` and `capability_tags`. Always load `ki-index.json` for `/ki-specify`.
+- **Leaving engineer-required sections blank without markers.** Always use the `⚠️` prefix and HTML comment prompts so reviewers know what needs to be filled.
+- **Wrong branch naming.** Use `ki/<id>-spec` exactly. Free-form names break the update pipeline correlation.
+- **Not scaffolding docs/specs/ when missing.** Always create the directory structure if it does not exist — do not ask permission, just scaffold and continue.
+- **Claiming the spec is complete.** The generated SDD is always a draft. Always state that sections 2 and 3 require engineer input before the PR can be approved.
+
+## Review checklist
+
+- [ ] Was the ticket ID resolved from `ki-index.json` (not `ki-product-map.json`)?
+- [ ] Does the SDD include all 7 sections?
+- [ ] Are sections 2 (Root Cause) and 3 (Proposed Solution) marked with `⚠️` and prompt comments?
+- [ ] Is the output file saved to `docs/specs/ki-<ticket_id>.md`?
+- [ ] If GitHub MCP is connected, is the branch named `ki/<ticket_id>-spec`?
+- [ ] Is the PR marked as draft?
+
+## Related skills
+
+- [`ki-check`](../ki-check/SKILL.md) — Look up open KIs for a repo or product area before deciding which one to spec
+
+## Reference
+
+- [VTEX Known Issues Help Center](https://help.vtex.com/known-issues) — Public list of open Known Issues
