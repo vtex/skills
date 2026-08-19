@@ -10316,6 +10316,10 @@ Do not use this skill for:
 - Pixel apps that need configuration should also consume settings through `ctx.clients.apps.getAppSettings(...)` on the backend side of the pixel app. If a value must be available to injected JavaScript, expose only non-sensitive fields through `access: "public"` and `publicSettingsForApp`, keeping secrets strictly on the server side.
 - Make code resilient to missing or incomplete settings by validating or applying defaults at the consumption boundary.
 - Never assume settings are identical across accounts or workspaces. Each workspace may have different app configuration during development, rollout, or debugging.
+- Saved settings are scoped to the app's **major** version range, not to the full version. They persist across minor and patch releases, and they do **not** carry over to a new major.
+- Because settings are keyed by major, choose defaults that are safe when the stored value is absent. After a major bump every merchant reads schema defaults until settings are re-applied, and a feature flag defaulting to `false` silently turns the feature off with no error.
+- For values that must survive a major bump, such as operational kill switches, do not rely on `settingsSchema` alone. Persist them under a version-independent key (for example VBase keyed by the app name with the `@version` suffix stripped) and accept that you then own the admin surface for editing them.
+- Plan a settings re-apply step into any major-version upgrade runbook, and verify the settings of the new major before considering the rollout complete.
 
 Settings vs configuration builder:
 
@@ -10485,6 +10489,50 @@ If a proposed setting stores records that behave like orders, reviews, logs, or 
 }
 ```
 
+### Constraint: Settings must not be assumed to survive a major version bump
+
+Saved app settings are scoped to the app's major version range. Configuration that must outlive a major bump MUST either be re-applied as part of the upgrade or stored under a version-independent key.
+
+**Why this matters**
+
+Settings are addressed by major range, so `vtex.my-app@3.x` and `vtex.my-app@4.x` are separate configuration scopes. Releasing `3.6.1` after `3.6.0` keeps every saved value, but releasing `4.0.0` starts from an empty settings object.
+
+This fails quietly. Nothing errors: the app simply reads schema defaults, so a flag that gated a behavior reverts to its default and the feature silently turns off for every merchant. Reading with the full version at runtime hides the distinction, because `getAppSettings(process.env.VTEX_APP_ID)` resolves `vtex.my-app@3.6.1` to the `3.x` scope for you.
+
+**Detection**
+
+If a major version bump is planned and any behavior depends on a saved setting, STOP and decide explicitly whether each value is re-applied after the upgrade or moved to version-independent storage. If a setting acts as a kill switch or protects against an incident, treat `settingsSchema` alone as insufficient.
+
+**Correct**
+
+```typescript
+// Fail-safe default: losing the stored value degrades to the previous
+// behavior rather than changing it.
+const settings = await ctx.clients.apps.getAppSettings(
+  ctx.vtex.appId ?? process.env.VTEX_APP_ID
+)
+const useNewPricing = settings.useNewPricing ?? false
+
+// For a switch that must survive a major bump, key it without the version
+// so the same key is read before and after the upgrade.
+const [appName] = String(process.env.VTEX_APP_ID).split('@')
+const killSwitch = await ctx.clients.vbase.getJSON('app_runtime_flags', appName, true)
+```
+
+**Wrong**
+
+```typescript
+// Assumes the merchant's saved value is still there after 4.0.0, and
+// silently disables the integration when it is not.
+const settings = await ctx.clients.apps.getAppSettings(
+  ctx.vtex.appId ?? process.env.VTEX_APP_ID
+)
+
+if (settings.integrationEnabled) {
+  await runIntegration()
+}
+```
+
 ### Constraint: Code must validate or default settings at the consumption boundary
 
 Settings-dependent code MUST tolerate missing or incomplete values safely.
@@ -10531,6 +10579,9 @@ Use frontend GraphQL access only for intentionally public settings, and keep bac
 - Adding workspace-level policies such as `read-workspace-apps` or invalid policies such as `write-workspace-apps` as a generic workaround for app settings permission errors, instead of validating the correct appId and standard app-settings permissions.
 - Using `settingsSchema` when the requirement is really block-level Store Framework configuration.
 - Creating schemas that are too broad or vague.
+- Assuming saved settings carry over to a new major version, so a feature silently reverts to its default after the upgrade.
+- Choosing a default that changes behavior when the stored value is missing, instead of a fail-safe one.
+- Keeping an operational kill switch only in `settingsSchema`, where a major bump resets it.
 
 ## Review checklist
 
@@ -10541,6 +10592,8 @@ Use frontend GraphQL access only for intentionally public settings, and keep bac
 - [ ] Are secrets kept backend-only and never exposed to the frontend?
 - [ ] If `access: "public"` is used, are all exposed settings intentionally safe for frontend consumption?
 - [ ] Is the settings surface small and intentional?
+- [ ] Is each default fail-safe, so that losing the stored value degrades rather than changes behavior?
+- [ ] If a major version bump is planned, is there a step to re-apply settings, and do any kill switches live in version-independent storage instead?
 
 ## Reference
 
