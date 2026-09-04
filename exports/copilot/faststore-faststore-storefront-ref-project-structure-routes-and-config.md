@@ -152,7 +152,7 @@ Example `package.json` scripts (many stores match this shape):
 }
 ```
 
-**Headless CMS schema:** Treat **`cms-sync` / `faststore cms-sync`** as **legacy** for **publishing or refreshing** the **Headless CMS** schema. The current flow is **`vtex content generate-schema`** and **`vtex content upload-schema`** (global **VTEX CLI**, `vtex` — not `npx vtex`). See [cms-schema-and-section-registration.md](cms-schema-and-section-registration.md) and the storefront [skill.md](../skill.md).
+**CMS schema:** The recommended way to publish or refresh the CMS schema is the consolidated **`faststore cms-sync`** (install with `npm install -g @faststore/cli` if the binary is missing, or use `yarn faststore cms-sync`). It runs **`vtex content generate-schema`** + **`vtex content upload-schema`** for you (global **VTEX CLI**, `vtex` — not `npx vtex`); you can also run those two commands manually as a fallback. Avoid the legacy v3-style `yarn cms-sync` / `npm run cms-sync` full-sync behavior. See [cms-schema-and-section-registration.md](cms-schema-and-section-registration.md) and the storefront [skill.md](../skill.md).
 
 ### What `faststore build` / `faststore dev` Does
 

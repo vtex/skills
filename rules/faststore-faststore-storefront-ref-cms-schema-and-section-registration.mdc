@@ -24,7 +24,7 @@ To edit **content** in existing sections, use the Store Admin at:
 ## Critical Rules
 
 1. There is no need of creating `cms/faststore/pages/*.jsonc` files for new sections. This should be edited only when a new landing page is needed.
-2. After every change to `cms/faststore/components/*.jsonc` or `cms/faststore/pages/*.jsonc`, you **must** run **`vtex content generate-schema`** and **`vtex content upload-schema`** in the same working session (see [End-to-end agent workflow](#end-to-end-agent-workflow)). **Do not** use `yarn cms-sync`, `faststore cms-sync`, or other legacy `cms-sync` flows to publish Headless CMS schema — use **`vtex content`** only.
+2. After every change to `cms/faststore/components/*.jsonc` or `cms/faststore/pages/*.jsonc`, you **must** publish the schema in the same working session (see [End-to-end agent workflow](#end-to-end-agent-workflow)). The **recommended** way is the consolidated **`faststore cms-sync`** (it runs `vtex content generate-schema` + `vtex content upload-schema` for you; install with `npm install -g @faststore/cli` if the binary is missing). If it is unavailable, fall back to running **`vtex content generate-schema`** and **`vtex content upload-schema`** manually. **Do not** use the legacy `yarn cms-sync` / `npm run cms-sync` project scripts (the v3-style full-sync behavior).
 3. Every file inside the folder `cms/faststore/components/` should follow this name pattern and extension: `cms_component__<name>.jsonc`
 4. Follow the conventions of the native components in `node_modules/@faststore/core/cms/faststore/components/` — see [Native Component Pattern Reference](#native-component-pattern-reference) for the full style guide
 5. **Every custom section MUST use the `section` class as its first CSS class** on the root `<section>` element. This class provides the standard FastStore section spacing, padding, and responsive behavior. Always place it before any component-specific classes.
@@ -231,12 +231,12 @@ Follow this EXACT sequence. Do NOT skip steps.
 
 ### Phase 4: Schema Management (SAME SESSION)
 
-- [ ] Generate: `vtex content generate-schema -o cms/faststore/schema.json  `
-- [ ] Verify: `grep -A 5 '"<ComponentName>"' cms/faststore/schema.json` (search for the `$componentKey` string)
-  - If it does not appear, fix JSONC or registration — **do not** edit `schema.json` manually
-- [ ] **Account check** (before upload): read `api.storeId` from `discovery.config.js` and run `vtex whoami` — confirm both match. If they differ, ask the user to run `vtex login <correct-account>` and **stop**.
-- [ ] **Ask the user**: _"The schema will be uploaded to account **`<store-id>`**. Do you want to proceed?"_ — wait for confirmation before continuing.
-- [ ] Upload: `vtex content upload-schema cms/faststore/schema.json` (**required** — without upload, the CMS editor will not see new or updated section definitions)
+- [ ] **Account check** (before any upload): read `api.storeId` from `discovery.config.js` and run `vtex whoami` — confirm both match. If they differ, ask the user to run `vtex login <correct-account>` and **stop**.
+- [ ] **Ask the user**: _"The schema will be uploaded to account **`<account>`**. Do you want to proceed?"_ — wait for confirmation before continuing.
+- [ ] **Sync (recommended)**: `faststore cms-sync` (install with `npm install -g @faststore/cli` if the binary is missing, or use `yarn faststore cms-sync`). This generates `cms/faststore/schema.json` and uploads it. Use `--dry-run` to generate without uploading.
+- [ ] When prompted for the store ID, enter the value of `contentSource.project` from `discovery.config.js` (the published id is `{account}.{project}`; NOT the hardcoded `faststore`).
+- [ ] **Verify** (after the dry-run or generate step): `grep -A 5 '"<ComponentName>"' cms/faststore/schema.json` (search for the `$componentKey` string). If it does not appear, fix JSONC or registration — **do not** edit `schema.json` manually.
+- [ ] **Manual fallback** (if `faststore cms-sync` is unavailable): `vtex content generate-schema -o cms/faststore/schema.json` then `vtex content upload-schema cms/faststore/schema.json` (**required** — without upload, the CMS editor will not see new or updated section definitions)
 - [ ] Confirm upload success message
 
 ### Phase 5: Validation & Deployment
@@ -287,21 +287,26 @@ Assume **VTEX CLI is installed globally** — invoke `vtex` directly (not `npx v
 
 From the **project root**:
 
-1. **Generate** (canonical command — matches the storefront skill):
+1. **Sync (recommended)** — run the consolidated command, which generates `cms/faststore/schema.json` and uploads it:
 
 ```bash
-vtex content generate-schema -o cms/faststore/schema.json  
+faststore cms-sync
+# if the "faststore" binary is missing: npm install -g @faststore/cli
+# or use the project's local copy: yarn faststore cms-sync
 ```
+
+Add `--dry-run` to generate the schema without uploading.
 
 2. **Validate** — for new or renamed sections, grep or read `cms/faststore/schema.json` and confirm the `"$componentKey"` is present.
 
-3. **Upload** (mandatory for the CMS to pick up schema changes):
+3. **Manual fallback** (if `faststore cms-sync` is unavailable, or to run steps individually):
 
 ```bash
+vtex content generate-schema -o cms/faststore/schema.json
 vtex content upload-schema cms/faststore/schema.json
 ```
 
-The store ID you enter at prompts should match `api.storeId` in `discovery.config.js`.
+At the store ID prompt, enter the value of `contentSource.project` from `discovery.config.js` (the published id is `{account}.{project}`; NOT the hardcoded `faststore`). The logged-in account must still match `api.storeId` (see the account verification below).
 
 ### Pre-upload account verification (MANDATORY)
 
@@ -335,13 +340,16 @@ The output includes the account name (e.g. `Logged into account: mystore`). Extr
 
 Wait for the user's response. **Only proceed if the user confirms.**
 
+> **`api.storeId` (account) vs the "store ID" prompt are different values.** The account verified above (`api.storeId` + `vtex whoami`) is the VTEX account you upload to. The value the CLI asks for at the **"store ID" prompt** is the CP project — the value of `contentSource.project` in `discovery.config.js` (falling back to `faststore` for legacy Headless CMS). The published schema id is `{account}.{project}`.
+
 ### Non-interactive upload (automatic - USE ONLY AFTER ACCOUNT VERIFICATION)
 
-When uploading schema in an automated workflow, ALWAYS use `expect` to handle prompts automatically. **This block must only run after the pre-upload account verification above has passed and the user has confirmed.**
+When uploading schema in an automated workflow, ALWAYS use `expect` to handle prompts automatically. **This block must only run after the pre-upload account verification above has passed and the user has confirmed.** It applies to the manual `upload-schema` fallback; the recommended path is `faststore cms-sync` (which prompts interactively for the same store ID).
 
 ```bash
-# Export store ID from discovery.config.js
-export STORE_ID=$(node -e "console.log(require('./discovery.config.js').api.storeId)")
+# Derive the store ID prompt value from discovery.config.js:
+# contentSource.project for CP, falling back to "faststore" for legacy Headless CMS.
+export STORE_ID=$(node -e "const c=require('./discovery.config.js'); console.log((c.contentSource&&c.contentSource.project)||'faststore')")
 
 # Run upload with expect to auto-answer prompts
 # IMPORTANT: use single quotes so Tcl does not misinterpret $ tokens
@@ -350,7 +358,7 @@ export STORE_ID=$(node -e "console.log(require('./discovery.config.js').api.stor
 expect -c '
   spawn vtex content upload-schema cms/faststore/schema.json
   expect "store ID"
-  send "faststore\r"
+  send "$env(STORE_ID)\r"
   expect -re "uploaded|confirm"
   send "y\r"
   expect -re "Are you sure|confirm"
