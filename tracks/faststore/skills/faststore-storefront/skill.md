@@ -101,26 +101,64 @@ ls -la cms/faststore/components | grep -i daily  # Check for existing
 
 Assume **[VTEX CLI](https://developers.vtex.com/docs/guides/vtex-io-documentation-vtex-io-cli-install)** is installed globally. Use **`vtex` directly** (for example `vtex content …`). Do **not** document or suggest `npx vtex` for these flows.
 
-### Headless CMS schema rule (no legacy `cms-sync`)
+### CMS schema — recommended sync
 
-**Do not** recommend `yarn cms-sync`, `npm run cms-sync`, `faststore cms-sync`, or any other **legacy `cms-sync` flow** to publish or refresh the **Headless CMS** schema. For schema, the supported path is **`vtex content generate-schema`** and **`vtex content upload-schema`** (see below).
+**Primary path:** from the project root, run the consolidated FastStore CLI command:
+
+```bash
+faststore cms-sync
+```
+
+It auto-detects `cms/faststore/components` (and `cms/faststore/pages`), generates `cms/faststore/schema.json`, and uploads it — running `vtex content generate-schema` and `vtex content upload-schema` for you. Add `--dry-run` to generate the schema without uploading.
+
+If the `faststore` binary is not available, install the CLI (or use the project's local copy):
+
+```bash
+npm install -g @faststore/cli
+# or use the project's local copy:
+yarn faststore cms-sync
+```
+
+**Do not** use the legacy `yarn cms-sync` / `npm run cms-sync` project scripts (the v3-style full-sync behavior). Call `faststore cms-sync` directly, or use the manual `vtex content` fallback below.
+
+**Caveats (still apply even via `faststore cms-sync`):**
+
+- Requires an up-to-date `@vtex/cli-plugin-content` (`cms-sync` calls `vtex content` under the hood). Old versions (e.g. `1.0.4`) fail with `Failed to fetch the base schema from the registry. Not Found`. Fix: `vtex plugins install @vtex/cli-plugin-content` (verified on `1.10.2`).
+- The upload step is **interactive**: when prompted for the store ID, enter the value of `contentSource.project` in `discovery.config.js` (NOT the hardcoded `faststore`). The published schema id is `{account}.{project}` and the storefront reads exactly that id.
+- Content-type definitions belong in `cms/faststore/pages/`.
+
+> Scope: this consolidated command covers **Content Platform (CP)** projects (output `cms/faststore/schema.json`, detecting the `components` + `pages` directories). The `vtex content generate-schema` / `upload-schema` pair below is the manual fallback for the same flow.
 
 ### CMS schema workflow — follow through in the same session
 
 After **every** change to `cms/faststore/components/*.jsonc` or `cms/faststore/pages/*.jsonc`, complete this sequence **before considering the task done**:
 
-1. **Generate** — from the project root, run:
+1. **Sync (recommended)** — from the project root, run the consolidated command:
    ```bash
-   vtex content generate-schema -o cms/faststore/schema.json  
+   faststore cms-sync
+   # if the "faststore" binary is missing: npm install -g @faststore/cli
+   # or use the project's local copy: yarn faststore cms-sync
    ```
+   It auto-detects `cms/faststore/components` (and `cms/faststore/pages`), generates `cms/faststore/schema.json`, and uploads it. Add `--dry-run` to generate without uploading. The upload step is interactive (see step 3 for the store ID and a non-interactive fallback).
 
 2. **Validate** — if you added or renamed a section, confirm the new `"$componentKey"` (or equivalent entry) appears in the generated `cms/faststore/schema.json`. If it is missing, fix the JSONC or registration in `src/components/index.tsx` and regenerate — **never** patch `schema.json` manually.
-3. **Upload** — in the **same session**, use the non-interactive command:
+3. **Manual fallback / non-interactive upload** — if `faststore cms-sync` is unavailable or you need to run the steps individually, generate and upload with the global VTEX CLI:
    ```bash
-   # The CLI expects "faststore" as the schema suffix (not the storeId from discovery.config.js)
-   # This results in $id = {discovery.storeId}.faststore (e.g., brandless.faststore)
-   # Single quotes prevent Tcl from interpreting $id and other $ tokens in CLI output
-   expect -c 'spawn vtex content upload-schema cms/faststore/schema.json; expect "store ID"; send "faststore\r"; expect -re "uploaded|confirm"; send "y\r"; expect -re "Are you sure|confirm"; send "y\r"; expect eof' 2>&1
+   vtex content generate-schema -o cms/faststore/schema.json
+   ```
+   Then upload. When prompted for the store ID, enter the value of `contentSource.project` from `discovery.config.js` (the published schema id is `{account}.{project}`; NOT the hardcoded `faststore`). To automate the prompts:
+   ```bash
+   # Derive the store ID from discovery.config.js (falls back to "faststore" for legacy Headless CMS)
+   export STORE_ID=$(node -e "const c=require('./discovery.config.js'); console.log((c.contentSource&&c.contentSource.project)||'faststore')")
+   # Single quotes keep Tcl from misreading $id and other $ tokens in CLI output;
+   # $env(STORE_ID) is evaluated by the Tcl interpreter.
+   expect -c '
+     spawn vtex content upload-schema cms/faststore/schema.json
+     expect "store ID"; send "$env(STORE_ID)\r"
+     expect -re "uploaded|confirm"; send "y\r"
+     expect -re "Are you sure|confirm"; send "y\r"
+     expect eof
+   ' 2>&1
    ```
 4. **Report** — state clearly whether upload succeeded. If the CLI prompts for **login**, **store ID**, or **confirmation**, paste the **exact prompt or error** and specify the **human next step** (e.g. run `vtex login`, confirm the account matches `discovery.config.js` → `api.storeId`) or point to the **non-interactive `expect` example** in [references/cms-schema-and-section-registration.md](references/cms-schema-and-section-registration.md).
 
@@ -129,7 +167,11 @@ After **every** change to `cms/faststore/components/*.jsonc` or `cms/faststore/p
 Canonical commands (project root):
 
 ```bash
-vtex content generate-schema -o cms/faststore/schema.json  
+# Recommended (consolidated — runs generate-schema + upload-schema for you):
+faststore cms-sync
+
+# Manual fallback (two steps, global VTEX CLI):
+vtex content generate-schema -o cms/faststore/schema.json
 vtex content upload-schema cms/faststore/schema.json
 ```
 
@@ -144,7 +186,7 @@ Follow this process for every request:
 5. **Review** — After finishing, verify:
    - No code produced inside `.faststore/` folder
    - Code composed of `@faststore/components` atoms and molecules
-   - If CMS JSONC or pages JSONC changed: `generate-schema` was run, `schema.json` was validated (new `$componentKey` when applicable), `upload-schema` was attempted in-session, and the outcome (success or exact CLI prompt/error + next step) was reported
+   - If CMS JSONC or pages JSONC changed: `faststore cms-sync` (or the manual `generate-schema` + `upload-schema` fallback) was run, `schema.json` was validated (new `$componentKey` when applicable), the upload was attempted in-session, and the outcome (success or exact CLI prompt/error + next step) was reported
    - For new CMS sections: it is clear that **Admin → Storefront → Content** (or project `pages` JSONC policy) is still required for the section to appear on a live page
 
 ## Response Format
@@ -174,7 +216,7 @@ Load these on demand based on what the task requires. Do not load all of them up
 | [references/graphql-types-queries-and-mutations.md](references/graphql-types-queries-and-mutations.md)         | **Read-only API catalog:** built-in root `Query` / `Mutation` fields, enums (e.g. `StoreSort`), and field lists for types like `StoreProduct`, `StoreCart`, `StoreSession` — use when writing queries or checking what the platform already exposes (**not** for adding custom resolvers) |
 | [references/extending-graphql-with-custom-resolvers.md](references/extending-graphql-with-custom-resolvers.md) | **Implementation guide:** adding fields under `src/graphql/vtex/` or new operations under `src/graphql/thirdParty/`, wiring resolvers, `Server*` / `Client*` fragments, and consuming data with `usePDP` / `useQuery` / `useLazyQuery`                                                    |
 | [references/scss-styling-and-design-tokens.md](references/scss-styling-and-design-tokens.md)                   | SCSS module rules (wrapper class, no global SCSS), theming and CSS variables in `src/themes/custom-theme.scss`, and styling overrides that target inner UI structure                                                                                                                      |
-| [references/cms-schema-and-section-registration.md](references/cms-schema-and-section-registration.md)         | VTEX Headless CMS: `cms_component__*.jsonc` + `index.tsx` as source of truth, generated `schema.json`, end-to-end `vtex content` (no legacy `cms-sync`), mandatory `upload-schema`, Admin → Content vs `pages` JSONC, scopes, CMS props only (no ad-hoc props)                            |
+| [references/cms-schema-and-section-registration.md](references/cms-schema-and-section-registration.md)         | VTEX CMS: `cms_component__*.jsonc` + `index.tsx` as source of truth, generated `schema.json`, recommended `faststore cms-sync` (with the manual `vtex content` fallback), store ID = `contentSource.project`, Admin → Content vs `pages` JSONC, scopes, CMS props only (no ad-hoc props)                            |
 | [references/analytics-events-and-gtm.md](references/analytics-events-and-gtm.md)                               | `@faststore/sdk` analytics: `sendAnalyticsEvent`, `useAnalyticsEvent` / handler components, and setting `gtmContainerId` in `discovery.config.js`                                                                                                                                         |
 | [references/injecting-head-scripts-and-meta-tags.md](references/injecting-head-scripts-and-meta-tags.md)       | Custom `<head>` content via `src/scripts/ThirdPartyScripts.tsx` (verification meta tags, inline scripts, Partytown) — **not** the primary place for GTM; use `discovery.config.js` (see analytics reference)                                                                              |
 | [references/native-sections-and-overridable-slots.md](references/native-sections-and-overridable-slots.md)     | **Lookup only:** list of built-in global sections (e.g. `Navbar`, `ProductDetails`) and the **exact slot names** for `getOverriddenSection` — read before choosing which section to override; then open the overrides reference for implementation                                        |
