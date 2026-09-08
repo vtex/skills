@@ -127,7 +127,7 @@ yarn faststore cms-sync
 - The upload step is **interactive**: when prompted for the store ID, enter the value of `contentSource.project` in `discovery.config.js` (NOT the hardcoded `faststore`). The published schema id is `{account}.{project}` and the storefront reads exactly that id.
 - Content-type definitions belong in `cms/faststore/pages/`.
 
-> Scope: this consolidated command covers **Content Platform (CP)** projects (output `cms/faststore/schema.json`, detecting the `components` + `pages` directories). The `vtex content generate-schema` / `upload-schema` pair below is the manual fallback for the same flow.
+> Scope: this consolidated command covers **Content Platform (CP)** projects (output `cms/faststore/schema.json`, detecting the `components` + `pages` directories). The `vtex content generate-schema` / `upload-schema` pair below is the manual fallback for the same flow. On a project where `contentSource.type` in `discovery.config.js` is absent or `"CMS"` (legacy Headless CMS), `faststore cms-sync` still runs correctly (it takes a different internal path, `vtex cms sync <project>`), but produces no `schema.json` and the store-ID prompt won't match `contentSource.project` — none of the CP-specific steps above apply in that case.
 
 ### CMS schema workflow — follow through in the same session
 
