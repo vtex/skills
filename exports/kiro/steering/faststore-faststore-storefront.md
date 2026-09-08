@@ -115,22 +115,29 @@ yarn faststore cms-sync
 - The upload step is **interactive**: when prompted for the store ID, enter the value of `contentSource.project` in `discovery.config.js` (NOT the hardcoded `faststore`). The published schema id is `{account}.{project}` and the storefront reads exactly that id.
 - Content-type definitions belong in `cms/faststore/pages/`.
 
-> Scope: this consolidated command covers **Content Platform (CP)** projects (output `cms/faststore/schema.json`, detecting the `components` + `pages` directories). The `vtex content generate-schema` / `upload-schema` pair below is the manual fallback for the same flow.
+> Scope: this consolidated command covers **Content Platform (CP)** projects (output `cms/faststore/schema.json`, detecting the `components` + `pages` directories). The `vtex content generate-schema` / `upload-schema` pair below is the manual fallback for the same flow. On a project where `contentSource.type` in `discovery.config.js` is absent or `"CMS"` (legacy Headless CMS), `faststore cms-sync` still runs correctly (it takes a different internal path, `vtex cms sync <project>`), but produces no `schema.json` and the store-ID prompt won't match `contentSource.project` — none of the CP-specific steps above apply in that case.
 
 ### CMS schema workflow — follow through in the same session
 
 After **every** change to `cms/faststore/components/*.jsonc` or `cms/faststore/pages/*.jsonc`, complete this sequence **before considering the task done**:
 
-1. **Sync (recommended)** — from the project root, run the consolidated command:
+1. **Generate & validate (dry-run)** — from the project root, run:
    ```bash
-   faststore cms-sync
+   faststore cms-sync --dry-run
    # if the "faststore" binary is missing: npm install -g @faststore/cli
-   # or use the project's local copy: yarn faststore cms-sync
+   # or use the project's local copy: yarn faststore cms-sync --dry-run
    ```
-   It auto-detects `cms/faststore/components` (and `cms/faststore/pages`), generates `cms/faststore/schema.json`, and uploads it. Add `--dry-run` to generate without uploading. The upload step is interactive (see step 3 for the store ID and a non-interactive fallback).
+   This generates `cms/faststore/schema.json` without uploading.
 
 2. **Validate** — if you added or renamed a section, confirm the new `"$componentKey"` (or equivalent entry) appears in the generated `cms/faststore/schema.json`. If it is missing, fix the JSONC or registration in `src/components/index.tsx` and regenerate — **never** patch `schema.json` manually.
-3. **Manual fallback / non-interactive upload** — if `faststore cms-sync` is unavailable or you need to run the steps individually, generate and upload with the global VTEX CLI:
+
+3. **Sync (recommended)** — once validated, run without `--dry-run` to upload:
+   ```bash
+   faststore cms-sync
+   ```
+   The upload step is interactive (see step 4 for the store ID and a non-interactive fallback).
+
+4. **Manual fallback / non-interactive upload** — if `faststore cms-sync` is unavailable or you need to run the steps individually, generate and upload with the global VTEX CLI:
    ```bash
    vtex content generate-schema -o cms/faststore/schema.json
    ```
@@ -148,7 +155,7 @@ After **every** change to `cms/faststore/components/*.jsonc` or `cms/faststore/p
      expect eof
    ' 2>&1
    ```
-4. **Report** — state clearly whether upload succeeded. If the CLI prompts for **login**, **store ID**, or **confirmation**, paste the **exact prompt or error** and specify the **human next step** (e.g. run `vtex login`, confirm the account matches `discovery.config.js` → `api.storeId`) or point to the **non-interactive `expect` example** in [references/cms-schema-and-section-registration.md](faststore-faststore-storefront-ref-cms-schema-and-section-registration.md).
+5. **Report** — state clearly whether upload succeeded. If the CLI prompts for **login**, **store ID**, or **confirmation**, paste the **exact prompt or error** and specify the **human next step** (e.g. run `vtex login`, confirm the account matches `discovery.config.js` → `api.storeId`) or point to the **non-interactive `expect` example** in [references/cms-schema-and-section-registration.md](faststore-faststore-storefront-ref-cms-schema-and-section-registration.md).
 
 **What upload does vs. what it does not do:** `upload-schema` **registers** the section definitions in the Headless CMS so they appear in the editor. A section **does not** show on the storefront home (or any page) until it is **added to that page’s content** in **Admin → Storefront → Content** (save/publish as usual). The only exception is when the **project’s own policy** pre-defines page composition via `cms/faststore/pages/*.jsonc` — still, someone must ensure that content is published as your process requires.
 

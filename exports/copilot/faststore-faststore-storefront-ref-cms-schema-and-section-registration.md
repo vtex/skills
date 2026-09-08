@@ -225,11 +225,12 @@ Follow this EXACT sequence. Do NOT skip steps.
 
 ### Phase 4: Schema Management (SAME SESSION)
 
+> This flow assumes `contentSource.type: "CP"` in `discovery.config.js`. On a legacy-CMS project (type absent or `"CMS"`), `faststore cms-sync` still runs correctly (`vtex cms sync <project>` internally), but produces no `schema.json` to validate and the store-ID prompt won't match `contentSource.project` — the steps below don't apply as written.
 - [ ] **Account check** (before any upload): read `api.storeId` from `discovery.config.js` and run `vtex whoami` — confirm both match. If they differ, ask the user to run `vtex login <correct-account>` and **stop**.
 - [ ] **Ask the user**: _"The schema will be uploaded to account **`<account>`**. Do you want to proceed?"_ — wait for confirmation before continuing.
-- [ ] **Sync (recommended)**: `faststore cms-sync` (install with `npm install -g @faststore/cli` if the binary is missing, or use `yarn faststore cms-sync`). This generates `cms/faststore/schema.json` and uploads it. Use `--dry-run` to generate without uploading.
-- [ ] When prompted for the store ID, enter the value of `contentSource.project` from `discovery.config.js` (the published id is `{account}.{project}`; NOT the hardcoded `faststore`).
-- [ ] **Verify** (after the dry-run or generate step): `grep -A 5 '"<ComponentName>"' cms/faststore/schema.json` (search for the `$componentKey` string). If it does not appear, fix JSONC or registration — **do not** edit `schema.json` manually.
+- [ ] **Generate & validate (dry-run)**: `faststore cms-sync --dry-run` (install with `npm install -g @faststore/cli` if the binary is missing, or use `yarn faststore cms-sync --dry-run`). This generates `cms/faststore/schema.json` without uploading.
+- [ ] **Verify**: `grep -A 5 '"<ComponentName>"' cms/faststore/schema.json` (search for the `$componentKey` string). If it does not appear, fix JSONC or registration — **do not** edit `schema.json` manually.
+- [ ] **Sync (recommended)**: once validated, run `faststore cms-sync` (no `--dry-run`) to upload. When prompted for the store ID, enter the value of `contentSource.project` from `discovery.config.js` (the published id is `{account}.{project}`; NOT the hardcoded `faststore`).
 - [ ] **Manual fallback** (if `faststore cms-sync` is unavailable): `vtex content generate-schema -o cms/faststore/schema.json` then `vtex content upload-schema cms/faststore/schema.json` (**required** — without upload, the CMS editor will not see new or updated section definitions)
 - [ ] Confirm upload success message
 
