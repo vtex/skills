@@ -15,6 +15,7 @@ Do not use this skill for:
 - Idempotency and duplicate prevention logic — use [`payment-idempotency`](payment-payment-idempotency.md)
 - Async payment flows and callback URLs — use [`payment-async-flow`](payment-payment-async-flow.md)
 - PCI compliance and Secure Proxy card handling — use [`payment-pci-security`](payment-payment-pci-security.md)
+- POS / VTEX Sales App card-present payments (`Venda Direta Credito`, `Venda Direta Debito`, terminal Payment Apps) — use [`payment-ppp-pos`](payment-payment-ppp-pos.md) together with this skill for endpoint shapes
 
 ## Decision rules
 
@@ -422,6 +423,7 @@ export default configRouter;
 - [`payment-idempotency`](payment-payment-idempotency.md) — Idempotency keys (`paymentId`, `requestId`) and state machine for duplicate prevention
 - [`payment-async-flow`](payment-payment-async-flow.md) — Async payment methods, `callbackUrl`, and the 7-day retry window
 - [`payment-pci-security`](payment-payment-pci-security.md) — PCI compliance, Secure Proxy, and card data handling
+- [`payment-ppp-pos`](payment-payment-ppp-pos.md) — POS / Sales App card-present overlay; use with this skill for endpoint shapes
 - [`vtex-io-application-performance`](vtex-io-vtex-io-application-performance.md) — Per-client timeout/retry tuning, VBase correctness constraints, and structured logging for IO-based payment connectors
 
 ## Reference

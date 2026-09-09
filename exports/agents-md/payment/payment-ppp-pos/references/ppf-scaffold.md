@@ -1,0 +1,412 @@
+# PPF scaffold (overlay on the official example)
+
+Start from the official example app in [Payment Provider Framework](https://developers.vtex.com/docs/guides/payments-integration-payment-provider-framework) Getting started. This is the POS overlay, not a replacement for [`payment-provider-framework`](../../payment-provider-framework/skill.md).
+
+TypeScript must stay compatible with builder-hub **3.9.7** (no typed `catch`, no `override`, no `satisfies`). Replace `PartnerPos`, `partnername`, `connector-partnerpos`, and processor hosts with the partner's values.
+
+Do **not** call `SecureExternalClient` on the POS path. Gateway `card` fields are `null`. Leave `usesSecureProxy` unset (PPF default `true`) unless the partner also processes ecommerce cards.
+
+## What to copy from the example vs what to replace
+
+| Keep from the example | Replace / add for POS |
+|---|---|
+| `PaymentProvider` + `PaymentProviderService` wiring | `paymentProvider/configuration.json` methods |
+| `vbase-read-write` policy | Extra `service.json` routes (`posSerial`, `posWebhook`) |
+| VBase persistence idea (`authorizations` bucket) | A POS bucket with phases, not only a final `AuthorizationResponse` |
+| Test Suite `isTestSuite` + `this.callback(req, resp)` if the partner still needs Test Suite | POS `authorize()` state machine + extra-route retry |
+| `inbound: undefined` unless the processor truly needs inbound | Do not use inbound for the barcode serial |
+
+The example's `saveAndRetry` persists a full `AuthorizationResponse` and calls `this.callback`. That is the **Test Suite** async pattern. POS production must not send `approved` until the terminal finishes, and the processor webhook is an extra public route — it cannot call `this.retry` / `this.callback` unless you are inside a `PaymentProvider` method.
+
+## Target layout
+
+```text
+/
+├── manifest.json
+├── paymentProvider/
+│   └── configuration.json
+├── service.json
+└── node/
+    ├── index.ts
+    ├── connector.ts
+    └── pos/
+        ├── serial.ts
+        └── webhook.ts
+```
+
+PPP routes (`/manifest`, `/payments`, …) stay registered by `PaymentProviderService`. Only extra POS routes belong in `service.json`.
+
+## `paymentProvider/configuration.json`
+
+```json
+{
+  "name": "PartnerPos",
+  "paymentMethods": [
+    { "name": "Venda Direta Debito", "allowsSplit": "onCapture" },
+    { "name": "Venda Direta Credito", "allowsSplit": "onCapture" }
+  ]
+}
+```
+
+Do not keep the example's `"MyConnector"` / Visa-only list if this app is POS-only.
+
+## `manifest.json` (relevant bits)
+
+Keep `paymentProvider: "1.x"`, `vbase-read-write`, and `outbound-access` for the processor host. The current example uses `node: "6.x"`; the PPF guide may show `node: "7.x"`. Clone the example as-is, then follow [`payment-provider-framework`](../../payment-provider-framework/skill.md) if the partner already uses `7.x`.
+
+```json
+{
+  "name": "connector-partnerpos",
+  "vendor": "partnername",
+  "builders": {
+    "node": "6.x",
+    "paymentProvider": "1.x"
+  },
+  "policies": [
+    { "name": "vbase-read-write" },
+    {
+      "name": "outbound-access",
+      "attrs": { "host": "api.partner-processor.example.com", "path": "/*" }
+    }
+  ]
+}
+```
+
+## `service.json` extra routes
+
+The example's `docs/README.md` redeclares PPP paths. For a PPF app you usually **do not** redeclare `/payments`. Add only POS extras:
+
+```json
+{
+  "memory": 256,
+  "ttl": 10,
+  "timeout": 10,
+  "minReplicas": 2,
+  "maxReplicas": 4,
+  "routes": {
+    "posSerial": {
+      "path": "/_v/partnerpos/pos/serial/:paymentId",
+      "public": true
+    },
+    "posWebhook": {
+      "path": "/_v/partnerpos/pos/webhook",
+      "public": true
+    }
+  }
+}
+```
+
+`submitUrl` in `paymentAppData` must be the public HTTPS URL of `posSerial`.
+
+## `node/index.ts`
+
+```typescript
+import { PaymentProviderService } from '@vtex/payment-provider'
+
+import PartnerPosConnector from './connector'
+import { posSerial } from './pos/serial'
+import { posWebhook } from './pos/webhook'
+
+export default new PaymentProviderService({
+  connector: PartnerPosConnector,
+  routes: {
+    posSerial: posSerial,
+    posWebhook: posWebhook,
+  },
+})
+```
+
+## Public host for `submitUrl`
+
+In a linked workspace the Payment App must POST to `{workspace}--{account}.myvtex.com`. On `master`, omit the workspace prefix.
+
+```typescript
+function publicHost(ctx: { vtex: { account: string; workspace?: string } }): string {
+  const account = ctx.vtex.account
+  const workspace = ctx.vtex.workspace
+  const prefix = workspace && workspace !== 'master' ? workspace + '--' : ''
+  return prefix + account + '.myvtex.com'
+}
+```
+
+## `node/pos/serial.ts`
+
+`vtex.terminal-connector-app` POSTs `{"serialNumber":"..."}` here. This route is public by design. Do not map it to PPP inbound-request.
+
+```typescript
+import { json } from 'co-body'
+
+const POS_BUCKET = 'pos-payments'
+
+export async function posSerial(ctx: any, next: () => Promise<void>) {
+  const paymentId = ctx.vtex.route.params.paymentId as string
+  const body = (await json(ctx.req)) as { serialNumber?: string }
+  const serialNumber = body && body.serialNumber
+
+  if (!paymentId || !serialNumber) {
+    ctx.status = 400
+    ctx.body = { accepted: false }
+    return
+  }
+
+  const existing = await ctx.clients.vbase.getJSON<any>(POS_BUCKET, paymentId, true)
+
+  if (!existing || existing.phase !== 'identify-terminal') {
+    ctx.status = 409
+    ctx.body = { accepted: false }
+    return
+  }
+
+  // Start the processor charge now. Do not wait for the shopper to finish on the POS.
+  // await partnerProcessor.startCharge({
+  //   paymentId: paymentId,
+  //   serialNumber: serialNumber,
+  //   amount: existing.value,
+  // })
+
+  await ctx.clients.vbase.saveJSON(POS_BUCKET, paymentId, {
+    ...existing,
+    phase: 'await-pos',
+    serialNumber: serialNumber,
+  })
+
+  ctx.status = 200
+  ctx.body = { accepted: true }
+  await next()
+}
+```
+
+After this handler returns, the next Gateway `authorize()` must return Wait for confirmation — not a new terminal challenge, and not a second processor charge. Keep `startCharge` under 20 seconds; do not wait for the shopper to finish on the POS.
+
+## `node/pos/webhook.ts`
+
+When the processor reports `approved` or `denied`, persist card fragments, then **retry** by POSTing `{ paymentId }` to the stored `callbackUrl`. Keep the query string (`X-VTEX-signature`). Do not POST `status` / `cardBrand` on IO.
+
+```typescript
+import { json } from 'co-body'
+
+const POS_BUCKET = 'pos-payments'
+
+export async function posWebhook(ctx: any, next: () => Promise<void>) {
+  const event = (await json(ctx.req)) as {
+    paymentId: string
+    status: 'approved' | 'denied'
+    cardBrand: string
+    firstDigits: string
+    lastDigits: string
+    authorizationId?: string
+    nsu?: string
+    tid?: string
+    code?: string
+    message?: string
+  }
+
+  const existing = await ctx.clients.vbase.getJSON<any>(
+    POS_BUCKET,
+    event.paymentId,
+    true
+  )
+
+  if (!existing || !existing.callbackUrl) {
+    ctx.status = 404
+    ctx.body = { retryScheduled: false }
+    return
+  }
+
+  await ctx.clients.vbase.saveJSON(POS_BUCKET, event.paymentId, {
+    ...existing,
+    phase: event.status,
+    status: event.status,
+    cardBrand: event.cardBrand,
+    firstDigits: event.firstDigits,
+    lastDigits: event.lastDigits,
+    authorizationId: event.authorizationId,
+    nsu: event.nsu,
+    tid: event.tid,
+    code: event.code,
+    message: event.message,
+  })
+
+  await fetch(existing.callbackUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paymentId: event.paymentId }),
+  })
+
+  ctx.status = 200
+  ctx.body = { retryScheduled: true }
+  await next()
+}
+```
+
+Verify the processor's webhook authenticity with whatever signature the partner documents. Do not invent a secret.
+
+## `node/connector.ts` (POS `authorize`)
+
+```typescript
+import {
+  AuthorizationRequest,
+  AuthorizationResponse,
+  CancellationRequest,
+  CancellationResponse,
+  Cancellations,
+  PaymentProvider,
+  RefundRequest,
+  RefundResponse,
+  Refunds,
+  SettlementRequest,
+  SettlementResponse,
+  Settlements,
+} from '@vtex/payment-provider'
+
+const POS_METHODS = ['Venda Direta Credito', 'Venda Direta Debito']
+const SECONDS_WAITING = 600
+const POS_BUCKET = 'pos-payments'
+
+function delays() {
+  return {
+    delayToAutoSettle: 21600,
+    delayToAutoSettleAfterAntifraud: 1800,
+    delayToCancel: SECONDS_WAITING,
+  }
+}
+
+export default class PartnerPosConnector extends PaymentProvider {
+  private accountHost(): string {
+    const vtexCtx = (this.context as any).vtex as {
+      account: string
+      workspace?: string
+    }
+    const account = vtexCtx && vtexCtx.account ? vtexCtx.account : ''
+    const workspace = vtexCtx && vtexCtx.workspace
+    const prefix = workspace && workspace !== 'master' ? workspace + '--' : ''
+    return prefix + account + '.myvtex.com'
+  }
+
+  public async authorize(
+    authorization: AuthorizationRequest
+  ): Promise<AuthorizationResponse> {
+    const paymentMethod = (authorization as any).paymentMethod as string
+    const paymentId = authorization.paymentId
+
+    if (POS_METHODS.indexOf(paymentMethod) === -1) {
+      return {
+        paymentId: paymentId,
+        status: 'denied',
+        authorizationId: null,
+        nsu: null,
+        tid: null,
+        acquirer: 'PartnerPos',
+        code: 'UNSUPPORTED_METHOD',
+        message: 'This connector handles POS methods only',
+        ...delays(),
+      } as AuthorizationResponse
+    }
+
+    const existing = await this.context.clients.vbase.getJSON<any>(
+      POS_BUCKET,
+      paymentId,
+      true
+    )
+
+    if (!existing) {
+      await this.context.clients.vbase.saveJSON(POS_BUCKET, paymentId, {
+        phase: 'identify-terminal',
+        status: 'undefined',
+        callbackUrl: (authorization as any).callbackUrl,
+        paymentMethod: paymentMethod,
+        value: (authorization as any).value,
+      })
+
+      return {
+        paymentId: paymentId,
+        status: 'undefined',
+        ...delays(),
+        paymentAppData: {
+          appName: 'vtex.terminal-connector-app',
+          payload: JSON.stringify({
+            submitUrl:
+              'https://' +
+              this.accountHost() +
+              '/_v/partnerpos/pos/serial/' +
+              paymentId,
+          }),
+        },
+      } as AuthorizationResponse
+    }
+
+    if (existing.status === 'approved' || existing.status === 'denied') {
+      return {
+        paymentId: paymentId,
+        status: existing.status,
+        authorizationId: existing.authorizationId,
+        nsu: existing.nsu,
+        tid: existing.tid,
+        acquirer: 'PartnerPos',
+        code: existing.code,
+        message: existing.message,
+        ...delays(),
+        cardBrand: existing.cardBrand,
+        firstDigits: existing.firstDigits,
+        lastDigits: existing.lastDigits,
+      } as AuthorizationResponse
+    }
+
+    if (existing.phase === 'await-pos') {
+      return {
+        paymentId: paymentId,
+        status: 'undefined',
+        ...delays(),
+        paymentAppData: {
+          appName: 'vtex.challenge-wait-for-confirmation',
+          payload: JSON.stringify({ secondsWaiting: SECONDS_WAITING }),
+        },
+      } as AuthorizationResponse
+    }
+
+    return {
+      paymentId: paymentId,
+      status: 'undefined',
+      ...delays(),
+      paymentAppData: {
+        appName: 'vtex.terminal-connector-app',
+        payload: JSON.stringify({
+          submitUrl:
+            'https://' +
+            this.accountHost() +
+            '/_v/partnerpos/pos/serial/' +
+            paymentId,
+        }),
+      },
+    } as AuthorizationResponse
+  }
+
+  public async cancel(
+    cancellation: CancellationRequest
+  ): Promise<CancellationResponse> {
+    return Cancellations.approve(cancellation, {
+      cancellationId: cancellation.paymentId,
+    })
+  }
+
+  public async refund(refund: RefundRequest): Promise<RefundResponse> {
+    return Refunds.deny(refund)
+  }
+
+  public async settle(
+    settlement: SettlementRequest
+  ): Promise<SettlementResponse> {
+    return Settlements.deny(settlement)
+  }
+
+  public inbound: undefined
+}
+```
+
+Wire the partner's `startPosCharge` from `posSerial` (after the serial is known), not from the first `authorize()`.
+
+`this.retry(authorization)` is valid **inside** this class (for example if a connector method receives the processor result). The webhook above is a Service route, so it uses `fetch(callbackUrl, { body: JSON.stringify({ paymentId }) })` instead.
+
+## Settle / refund / inbound
+
+POS still needs Cancel (Gateway `delayToCancel`). Implement settle/refund according to the processor. Leave `inbound` unimplemented unless the processor requires it — serial number is **not** inbound.

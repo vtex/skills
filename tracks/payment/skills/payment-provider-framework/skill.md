@@ -48,6 +48,7 @@ Do not use this skill for:
 - Idempotency and duplicate `paymentId` handling — use [`payment-idempotency`](../payment-idempotency/skill.md)
 - Async `undefined` status, `callbackUrl` notification vs retry (IO vs non-IO) — use [`payment-async-flow`](../payment-async-flow/skill.md)
 - PCI rules, logging, and token semantics beyond IO wiring — use [`payment-pci-security`](../payment-pci-security/skill.md)
+- POS / Sales App card-present overlay (`Venda Direta` methods, Payment Apps, terminal serial) — use [`payment-ppp-pos`](../payment-ppp-pos/skill.md) together with this skill
 
 ## Decision rules
 
@@ -796,6 +797,7 @@ Replace all example vendor names, endpoints, and credentials with values for you
 - [`payment-idempotency`](../payment-idempotency/skill.md) — `paymentId` / `requestId` and retries
 - [`payment-async-flow`](../payment-async-flow/skill.md) — `undefined` status, `callbackUrl` (IO retry vs notification), and redirect-based flows
 - [`payment-pci-security`](../payment-pci-security/skill.md) — PCI and Secure Proxy semantics beyond IO wiring
+- [`payment-ppp-pos`](../payment-ppp-pos/skill.md) — POS / Sales App card-present overlay (`Venda Direta` methods, Payment Apps, terminal callbacks)
 
 ## Reference
 

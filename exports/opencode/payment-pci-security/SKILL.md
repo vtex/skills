@@ -19,6 +19,7 @@ Do not use this skill for:
 - PPP endpoint contracts and response shapes — use [`payment-provider-protocol`](../payment-provider-protocol/SKILL.md)
 - Idempotency and duplicate prevention — use [`payment-idempotency`](../payment-idempotency/SKILL.md)
 - Async payment flows (Boleto, Pix) and callbacks — use [`payment-async-flow`](../payment-async-flow/SKILL.md)
+- POS / VTEX Sales App card-present payments, where Gateway `card` fields are null — use [`payment-ppp-pos`](../payment-ppp-pos/SKILL.md)
 
 ## Decision rules
 
@@ -568,6 +569,7 @@ function safePaymentLog(label: string, body: Record<string, unknown>): void {
 - [`payment-provider-protocol`](../payment-provider-protocol/SKILL.md) — Endpoint contracts and response shapes
 - [`payment-idempotency`](../payment-idempotency/SKILL.md) — `paymentId`/`requestId` idempotency and state machine
 - [`payment-async-flow`](../payment-async-flow/SKILL.md) — Async payment methods, callbacks, and the 7-day retry window
+- [`payment-ppp-pos`](../payment-ppp-pos/SKILL.md) — POS card-present payments; Gateway `card` is null and Secure Proxy does not apply
 
 ## Reference
 
