@@ -20,6 +20,7 @@ Do not use this skill for:
 - Idempotency and duplicate `paymentId` handling — use [`payment-idempotency`](../payment-idempotency/SKILL.md)
 - Async `undefined` status, `callbackUrl` notification vs retry (IO vs non-IO) — use [`payment-async-flow`](../payment-async-flow/SKILL.md)
 - PCI rules, logging, and token semantics beyond IO wiring — use [`payment-pci-security`](../payment-pci-security/SKILL.md)
+- POS / Sales App card-present overlay (`Venda Direta` methods, Payment Apps, terminal serial) — use [`payment-ppp-pos`](../payment-ppp-pos/SKILL.md) together with this skill
 
 ## Decision rules
 
