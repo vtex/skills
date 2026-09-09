@@ -126,7 +126,7 @@ function getCompanionFiles(skill: Skill): CompanionFile[] {
       } catch { continue; }
 
       companions.push({
-        relativePath: join(entry, file),
+        relativePath: join(entry, file).replace(/\\/g, "/"),
         fileName: file,
         dirName: entry,
         content: readFileSync(filePath, "utf-8"),

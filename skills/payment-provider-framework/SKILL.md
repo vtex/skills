@@ -768,6 +768,7 @@ Replace all example vendor names, endpoints, and credentials with values for you
 - [`payment-idempotency`](../payment-idempotency/SKILL.md) — `paymentId` / `requestId` and retries
 - [`payment-async-flow`](../payment-async-flow/SKILL.md) — `undefined` status, `callbackUrl` (IO retry vs notification), and redirect-based flows
 - [`payment-pci-security`](../payment-pci-security/SKILL.md) — PCI and Secure Proxy semantics beyond IO wiring
+- [`payment-ppp-pos`](../payment-ppp-pos/SKILL.md) — POS / Sales App card-present overlay (`Venda Direta` methods, Payment Apps, terminal callbacks)
 
 ## Reference
 
