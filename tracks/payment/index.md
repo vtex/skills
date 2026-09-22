@@ -39,7 +39,7 @@ The VTEX Payment Provider Protocol (PPP) defines how payment connectors integrat
 - **POS Create Payment is async with Payment Apps** — First response: `undefined` + `vtex.terminal-connector-app`. After serial number: `undefined` + `vtex.challenge-wait-for-confirmation`.
 - **Gateway `card` is null for POS** — Do not use Secure Proxy on the POS authorize path. Report `cardBrand`, `firstDigits`, and `lastDigits` on the processor callback (standalone notification body, or the next `authorize()` after IO retry).
 - **`delayToCancel` must be >= `secondsWaiting`** — Otherwise the Gateway cancels while Sales App is still waiting for the terminal.
-- **POS serial and processor webhooks are extra public routes** — Not PPP inbound-request. On IO, retry is POST `{ paymentId }` to `callbackUrl`.
+- **POS serial and processor webhooks are extra public routes** — Not PPP inbound-request. On IO, retry is a bodiless POST to `callbackUrl` (`this.retry` or `Payments.retry`).
 
 ## Related Tracks
 

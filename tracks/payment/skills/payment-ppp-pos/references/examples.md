@@ -19,8 +19,8 @@ Account: dummyaccount
 
 Do not generate an ecommerce Visa/Mastercard connector.
 Do not use Secure Proxy on the POS authorize path.
-On IO, persist the POS result, POST { paymentId } to callbackUrl (or this.retry inside PaymentProvider),
-and return cardBrand / firstDigits / lastDigits on the next authorize().
+On IO, persist the POS result, then Payments.retry(callbackUrl) or this.retry inside PaymentProvider
+(bodiless POST). Return cardBrand / firstDigits / lastDigits on the next authorize().
 Serial number must use a public custom route, not PPP inbound-request.
 ```
 
@@ -37,12 +37,15 @@ Keep X-VTEX-signature. Do not use this.retry.
 
 ## State machine (what each `authorize()` returns)
 
-| Stored phase | Create Payment / `authorize()` |
-|---|---|
-| *(no record)* | Create `identify-terminal`, return terminal app |
-| `identify-terminal` | `undefined` + `vtex.terminal-connector-app` (`submitUrl`) |
-| `await-pos` | `undefined` + `vtex.challenge-wait-for-confirmation` (`secondsWaiting`) |
-| `approved` / `denied` | Final status + `cardBrand` + `firstDigits` + `lastDigits` |
+The connector only **answers**. After the terminal app closes, VTEX Sales App triggers a Gateway callback (POS guide step 8). Wait for confirmation then polls (step 9). Do not POST `callbackUrl` until the processor webhook has a final status.
+
+| Stored phase | Who drives Create Payment | Create Payment / `authorize()` |
+|---|---|---|
+| *(no record)* | Sales App checkout → Gateway | Create `identify-terminal`, return terminal app |
+| `identify-terminal` (no serial) | Gateway / Sales App | `undefined` + `vtex.terminal-connector-app` (`submitUrl`) |
+| `identify-terminal` (serial stored) | Sales App after the terminal app closes (step 8) | Start charge **once**, then wait app |
+| `await-pos` | Wait for confirmation polling (step 9) | `undefined` + `vtex.challenge-wait-for-confirmation` (`secondsWaiting`); no retry POST |
+| `approved` / `denied` | Wait app / Sales App after IO retry | Final status + `cardBrand` + `firstDigits` + `lastDigits` |
 
 ## First `authorize()` response (identify terminal)
 
@@ -82,21 +85,25 @@ Serial POST body to `submitUrl`:
 }
 ```
 
-`delayToCancel` must be `>= secondsWaiting`. Repeated polls with the same `paymentId` must not start a second POS charge.
+`delayToCancel` must be `>= secondsWaiting`. Repeated polls with the same `paymentId` must not start a second POS charge. Those polls can overlap — persist with an etag / `ifMatch` (see [`payment-idempotency`](../../payment-idempotency/skill.md)).
 
 ## IO retry vs standalone notification
 
 | | PPF / VTEX IO | Standalone |
 |---|---|---|
 | `callbackUrl` | `/retry` | `/callback` or `/notification` |
-| When POS finishes | Persist, then POST `{ "paymentId" }` to `callbackUrl` (or `this.retry` inside `PaymentProvider`) | POST full payload to `callbackUrl` |
-| Retry/callback HTTP body | `{ "paymentId": "PAY-POS-001" }` only | Includes `status`, `cardBrand`, `firstDigits`, `lastDigits` |
+| When POS finishes | Persist, then bodiless POST to `callbackUrl` (`Payments.retry` or `this.retry` inside `PaymentProvider`) | POST full payload to `callbackUrl` |
+| Retry/callback HTTP body | Empty (`Payments.retry` posts `undefined`) | Includes `status`, `cardBrand`, `firstDigits`, `lastDigits` |
 | Where card fragments appear | Next `authorize()` response | Notification POST body |
 
-### IO retry body (correct)
+### IO retry (correct)
 
-```json
-{ "paymentId": "PAY-POS-001" }
+PPF retry is a **bodiless** POST to the stored `callbackUrl` (`paymentId` is already in the URL). `Payments.retry` is what `this.retry` uses.
+
+```typescript
+import { Payments } from '@vtex/payment-provider'
+
+await new Payments(ctx.vtex).retry(callbackUrl)
 ```
 
 ### Next `authorize()` after a successful IO retry
@@ -156,23 +163,21 @@ That is the standalone notification pattern. On IO it will not complete the Wait
 ### Right on IO (extra route / webhook)
 
 ```typescript
-await vbase.saveJSON('pos-payments', paymentId, {
+import { Payments } from '@vtex/payment-provider'
+
+await vbase.saveJSON('pos', paymentId, {
   status: 'approved',
   cardBrand: 'Visa',
   firstDigits: '411111',
   lastDigits: '1111',
 })
 
-await fetch(callbackUrl, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ paymentId: paymentId }),
-})
+await new Payments(ctx.vtex).retry(callbackUrl)
 ```
 
 Then `authorize()` reads that record and returns `approved` plus the three card fields.
 
-`this.retry(authorization)` is the same retry, but only inside a `PaymentProvider` method.
+`this.retry(authorization)` is the same bodiless retry, but only inside a `PaymentProvider` method.
 
 ## What generated code cannot do
 

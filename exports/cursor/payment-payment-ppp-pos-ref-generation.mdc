@@ -22,7 +22,7 @@ If any answer is missing, ask. Do not invent a production connector name, host, 
 
 | # | Question | Why it matters | Default if the user says "dummy / local test" |
 |---|---|---|---|
-| 1 | Connector name (`vendor.app-name`) | Becomes `manifest.json` `vendor`/`name` and the Admin affiliation | `dummyaccount.dummy-latam-pos` |
+| 1 | Connector name (`vendor.app-name`) | Becomes `manifest.json` `vendor`/`name` and the Admin affiliation. VBase metadata is `{vendor}.{appName}.{bucket}` and must stay ≤ 50 characters — keep the POS bucket `pos`. | `dummyaccount.dummy-latam-pos` |
 | 2 | Hosting: **VTEX IO / PPF** or **standalone HTTP** | Chooses IO retry vs notification callback | **PPF** |
 | 3 | Credit, debit, or both POS methods | Manifest must use exact API names | Both `Venda Direta Credito` and `Venda Direta Debito` |
 | 4 | Processor terminal API (how you start a charge on a serial number) | Outside VTEX; the connector only forwards the serial | In-memory stub |
@@ -44,13 +44,13 @@ Standalone HTTP is only when the partner already hosts PPP middleware. Then impl
 Do not skip steps. Each step has a STOP if the previous artifact is missing.
 
 1. Declare `Venda Direta Credito` / `Venda Direta Debito` in `paymentProvider/configuration.json` (PPF) or GET `/manifest` (standalone). **STOP** if the names have accents or differ from these ASCII strings.
-2. Persist a state machine keyed by `paymentId`: `identify-terminal` → `await-pos` → `approved` | `denied` | `canceled`. On PPF, use VBase (`vbase-read-write`). Store `callbackUrl`, `paymentMethod`, and `value` on first authorize.
-3. First `authorize()`: `status: "undefined"` + `vtex.terminal-connector-app` with string `payload.submitUrl`. **STOP** if `payload` is a nested object or `appName` is `vtex.challenge-terminal-connector-app`.
-4. Public HTTPS route for `{"serialNumber":"..."}`. **Not** PPP inbound-request. **STOP** if `submitUrl` contains `/inbound`.
-5. Start the processor charge only after the serial is stored. Repeated Create Payment polls must not start a second charge.
-6. Next `authorize()`: `undefined` + `vtex.challenge-wait-for-confirmation` (`secondsWaiting`). `delayToCancel >= secondsWaiting`.
+2. Persist a state machine keyed by `paymentId`: `identify-terminal` → `await-pos` → `approved` | `denied` | `canceled`. On PPF, use VBase (`vbase-read-write`) with a **short** bucket (`pos`) and `getRawJSON` + `saveJSON(..., ifMatch)` — Create Payment calls for one `paymentId` can overlap. Store `callbackUrl`, `paymentMethod`, and `value` on first authorize. Do not invent a random `tid` on that first write.
+3. First `authorize()`: `Authorizations.pending` + `vtex.terminal-connector-app` with string `payload.submitUrl`. **STOP** if `payload` is a nested object, `appName` is `vtex.challenge-terminal-connector-app`, or the pending body is cast with `as AuthorizationResponse`.
+4. Public HTTPS route for `{"serialNumber":"..."}`. Persist the serial only (POS guide step 7). **Not** PPP inbound-request. **STOP** if `submitUrl` contains `/inbound` or if this handler starts the POS charge.
+5. The **next** Create Payment (Sales App after the terminal app closes, step 8) starts the processor charge **once** (`ifMatch` winner only). Repeated polls (Wait for confirmation, step 9) must not start a second charge and must not POST `callbackUrl`.
+6. That Create Payment returns `undefined` + `vtex.challenge-wait-for-confirmation` (`secondsWaiting`). `delayToCancel >= secondsWaiting`.
 7. Processor webhook:
-   - **PPF extra route:** persist final status + `cardBrand` / `firstDigits` / `lastDigits`, then POST `{ "paymentId": "..." }` to the stored `callbackUrl` (keep the query string / `X-VTEX-signature`). That is IO retry. `this.retry(authorization)` is only valid inside a `PaymentProvider` method, not in a standalone route handler.
+   - **PPF extra route:** persist final status + `cardBrand` / `firstDigits` / `lastDigits`, then `new Payments(ctx.vtex).retry(stored.callbackUrl)` (bodiless POST; keep the query string / `X-VTEX-signature`). That is IO retry. `this.retry(authorization)` is only valid inside a `PaymentProvider` method, not in a standalone route handler.
    - **Standalone:** POST the notification payload (including those card fields) to `callbackUrl`. Keep `X-VTEX-signature`.
 8. Implement `cancel()` so Gateway timeout can abort `undefined`.
 9. Print the review checklist from the skill. Tell the partner what generated code cannot do.
@@ -62,6 +62,6 @@ Always include:
 - The files you created or patched, and that they overlay the official PPF example app rather than a blank Express app
 - The exact `paymentMethods` names
 - `submitUrl` and the processor webhook path
-- Whether the partner is on IO retry (`{ paymentId }` only) or standalone notification (status + card fragments)
+- Whether the partner is on IO retry (bodiless `Payments.retry` / `this.retry`) or standalone notification (status + card fragments)
 - The skill review checklist, unchecked items called out
 - This limitation, verbatim in spirit: a skill run cannot replace a Sales App device, a physical or certified test POS, Admin affiliation and payment conditions (`44` debit, `45` credit), the Payment Provider Test Suite, or homologation

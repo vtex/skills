@@ -17,12 +17,13 @@ Do not use this skill for:
 - PPP endpoint response shapes and HTTP methods — use [`payment-provider-protocol`](../payment-provider-protocol/SKILL.md)
 - Async callback URL notification logic — use [`payment-async-flow`](../payment-async-flow/SKILL.md)
 - PCI compliance and Secure Proxy — use [`payment-pci-security`](../payment-pci-security/SKILL.md)
+- POS / Sales App terminal payments (`Venda Direta Credito`, `Venda Direta Debito`, overlapping Create Payment while Wait for confirmation polls) — use [`payment-ppp-pos`](../payment-ppp-pos/SKILL.md) together with this skill
 
 ## Decision rules
 
 - Use `paymentId` as the idempotency key for Create Payment — every call with the same `paymentId` must return the same result.
 - Use `requestId` as the idempotency key for Cancel, Capture, and Refund operations.
-- If the Gateway sends a second Create Payment with the same `paymentId`, return the stored response without calling the acquirer again.
+- If the Gateway sends a second Create Payment with the same `paymentId`, return the stored response without calling the acquirer again. Those retries can **overlap**; last-write-wins storage can drop a status update — persist with an etag / `ifMatch` (see [`payment-ppp-pos`](../payment-ppp-pos/SKILL.md) for the POS overlay).
 - Async payment methods (Boleto, Pix) MUST return `status: "undefined"` — never `"approved"` until the acquirer confirms.
 - A payment moves through defined states: `undefined` → `approved` → `settled`, or `undefined` → `denied`, or `approved` → `cancelled`. Enforce valid transitions only.
 - Use a persistent data store (PostgreSQL, DynamoDB, VBase for VTEX IO) — never in-memory storage that is lost on restart.
@@ -357,6 +358,7 @@ async function cancelPaymentHandler(req: Request, res: Response): Promise<void> 
 - [`payment-provider-protocol`](../payment-provider-protocol/SKILL.md) — Endpoint contracts and response shapes
 - [`payment-async-flow`](../payment-async-flow/SKILL.md) — Callback URL notification and the 7-day retry window
 - [`payment-pci-security`](../payment-pci-security/SKILL.md) — PCI compliance and Secure Proxy
+- [`payment-ppp-pos`](../payment-ppp-pos/SKILL.md) — POS Create Payment is polled and can overlap for one `paymentId`; use this skill's `paymentId` key plus that skill's etag / `ifMatch` pattern
 - [`vtex-io-application-performance`](../../../vtex-io/skills/vtex-io-application-performance/SKILL.md) — VBase write correctness (await in critical paths), per-client timeout/retry config, and caching rules for IO-based connectors
 
 ## Reference

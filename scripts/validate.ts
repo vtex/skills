@@ -398,7 +398,7 @@ const trackConsistency: ValidationCheck = {
   name: "track-consistency",
   severity: "hard",
   check(skill: Skill): ValidationResult[] {
-    const pathParts = skill.filePath.split("/");
+    const pathParts = skill.filePath.split(/[/\\]/);
     const dirTrack = pathParts[1];
     const fmTrack = resolveField<string>(skill.frontmatter, "track");
 
