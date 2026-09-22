@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when working with graphql schema files in graphql/ or implementing resolvers in node/resolvers/ for vtex io apps. covers schema.graphql definitions, @cachecontrol and @auth directives, custom type definitions, and resolver registration in the service class. use for exposing data through graphql queries and mutations with proper cache control and authentication enforcement.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when working with GraphQL schema files in graphql/ or implementing resolvers in node/resolvers/ for VTEX IO apps. Covers schema.graphql definitions, @cacheControl and @auth directives, custom type definitions, and resolver registration in the Service class. Use for exposing data through GraphQL queries and mutations with proper cache control and authentication enforcement.
 
 # GraphQL Schemas & Resolvers
 

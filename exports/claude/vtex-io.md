@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building vtex io admin-facing react interfaces under the admin builder. covers vtex styleguide and shoreline usage, admin page composition, data-heavy admin interactions, and keeping administrative interfaces consistent with the vtex admin environment. use for settings pages, moderation tools, dashboards, or operational uis inside vtex admin.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building VTEX IO admin-facing React interfaces under the admin builder. Covers VTEX Styleguide and Shoreline usage, admin page composition, data-heavy admin interactions, and keeping administrative interfaces consistent with the VTEX Admin environment. Use for settings pages, moderation tools, dashboards, or operational UIs inside VTEX Admin.
 
 # Admin React Interfaces
 
@@ -284,7 +284,7 @@ Use paginated tables for large datasets, prefer server-side filtering when possi
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining or changing the contract of a vtex io app through manifest.json, builder declarations, dependencies, peerdependencies, billingoptions, and app identity. covers how the app declares capabilities and integration boundaries. use for scaffolding apps, splitting responsibilities across apps, or fixing contract-level link and publish issues.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining or changing the contract of a VTEX IO app through manifest.json, builder declarations, dependencies, peerDependencies, billingOptions, and app identity. Covers how the app declares capabilities and integration boundaries. Use for scaffolding apps, splitting responsibilities across apps, or fixing contract-level link and publish issues.
 
 # App Contract & Builder Boundaries
 
@@ -573,7 +573,7 @@ Use this split when the backend/API contract and the storefront contract have di
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining, validating, or consuming vtex io app settings. covers settingsschema, app-level configuration boundaries, and how backend or frontend code should depend on settings safely. use for merchant-configurable behavior, settings forms, or reviewing whether settings belong in app configuration rather than hardcoded logic or custom data entities.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining, validating, or consuming VTEX IO app settings. Covers settingsSchema, app-level configuration boundaries, and how backend or frontend code should depend on settings safely. Use for merchant-configurable behavior, settings forms, or reviewing whether settings belong in app configuration rather than hardcoded logic or custom data entities.
 
 # App Settings & Configuration Boundaries
 
@@ -845,7 +845,7 @@ Use frontend GraphQL access only for intentionally public settings, and keep bac
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when improving vtex io node or .net services for latency, throughput, and resilience: in-process lru, vbase, stale-while-revalidate, appsettings loading, request context, parallel client calls, and avoiding duplicate work. covers application-level performance patterns that complement edge/cdn caching. use when optimizing backends beyond route-level cache-control.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when improving VTEX IO Node or .NET services for latency, throughput, and resilience: in-process LRU, VBase, stale-while-revalidate, AppSettings loading, request context, parallel client calls, and avoiding duplicate work. Covers application-level performance patterns that complement edge/CDN caching. Use when optimizing backends beyond route-level Cache-Control.
 
 # VTEX IO application performance
 
@@ -1140,7 +1140,7 @@ async function getSkuMetadataBatch(
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding or implementing permissions and authorization boundaries for vtex io apps. covers manifest policies, outbound-access rules, least-privilege design, and how service routes or integrations map to explicit permissions. use for deciding who is authorized to call or consume a capability, adding new integrations, exposing protected routes, or reviewing app permissions for overreach or missing access.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding or implementing permissions and authorization boundaries for VTEX IO apps. Covers manifest policies, outbound-access rules, least-privilege design, and how service routes or integrations map to explicit permissions. Use for deciding who is authorized to call or consume a capability, adding new integrations, exposing protected routes, or reviewing app permissions for overreach or missing access.
 
 # Authorization & Policy Design
 
@@ -1442,7 +1442,7 @@ Review permissions whenever integrations change, not only when policy errors app
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when choosing which vtex io authentication token should back a request from a backend app. covers `ctx.authtoken`, `ctx.storeuserauthtoken`, `ctx.adminuserauthtoken`, `authmethod`, and how requester context should determine the identity used by vtex clients. use for deciding which identity talks to vtex endpoints in storefront-backed requests, admin actions, or app-level integrations that should avoid hardcoded vtex credentials.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when choosing which VTEX IO authentication token should back a request from a backend app. Covers `ctx.authToken`, `ctx.storeUserAuthToken`, `ctx.adminUserAuthToken`, `authMethod`, and how requester context should determine the identity used by VTEX clients. Use for deciding which identity talks to VTEX endpoints in storefront-backed requests, Admin actions, or app-level integrations that should avoid hardcoded VTEX credentials.
 
 # Auth Tokens & Request Context
 
@@ -1686,7 +1686,7 @@ Keep the decision close to the request boundary, then let downstream handlers an
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing how a vtex io backend app integrates with vtex services or external apis through @vtex/api and @vtex/clients. covers choosing the correct client type, registering clients in ioclients, configuring instanceoptions, and consuming integrations through ctx.clients. use for custom client design, vtex core commerce integrations, or reviewing backend code that should use vtex io client patterns instead of raw http libraries.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing how a VTEX IO backend app integrates with VTEX services or external APIs through @vtex/api and @vtex/clients. Covers choosing the correct client type, registering clients in IOClients, configuring InstanceOptions, and consuming integrations through ctx.clients. Use for custom client design, VTEX Core Commerce integrations, or reviewing backend code that should use VTEX IO client patterns instead of raw HTTP libraries.
 
 # Client Integration & Service Access
 
@@ -2000,7 +2000,7 @@ If a client file grows too large, split it by bounded integration domains and ke
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding where and how a vtex io app should store and read data. covers when to use app settings, configuration apps, master data, vbase, vtex core apis, or external stores, and how to avoid duplicating sources of truth or abusing configuration stores for operational data. use for new data flows, caching decisions, refactors, or reviewing suspicious storage and access patterns in vtex io apps.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding where and how a VTEX IO app should store and read data. Covers when to use app settings, configuration apps, Master Data, VBase, VTEX core APIs, or external stores, and how to avoid duplicating sources of truth or abusing configuration stores for operational data. Use for new data flows, caching decisions, refactors, or reviewing suspicious storage and access patterns in VTEX IO apps.
 
 # Data Access & Storage Patterns
 
@@ -2211,7 +2211,7 @@ If the app stores a local copy, keep it small, derived, and clearly secondary to
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing asynchronous processing in vtex io services through events, workers, and background handlers. covers event handler structure, idempotency, retry-safe processing, and moving expensive work out of request-response routes. use for event-driven integrations, delayed processing, or background jobs in vtex io apps.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing asynchronous processing in VTEX IO services through events, workers, and background handlers. Covers event handler structure, idempotency, retry-safe processing, and moving expensive work out of request-response routes. Use for event-driven integrations, delayed processing, or background jobs in VTEX IO apps.
 
 # Events, Workers & Async Processing
 
@@ -2458,7 +2458,7 @@ In development, use the Broadcaster app's `Notify Target Workspace` setting in A
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when working with graphql schema files in graphql/ or implementing resolvers in node/resolvers/ for vtex io apps. covers schema.graphql definitions, @cachecontrol and @auth directives, custom type definitions, and resolver registration in the service class. use for exposing data through graphql queries and mutations with proper cache control and authentication enforcement.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when working with GraphQL schema files in graphql/ or implementing resolvers in node/resolvers/ for VTEX IO apps. Covers schema.graphql definitions, @cacheControl and @auth directives, custom type definitions, and resolver registration in the Service class. Use for exposing data through GraphQL queries and mutations with proper cache control and authentication enforcement.
 
 # GraphQL Schemas & Resolvers
 
@@ -2908,7 +2908,7 @@ mutation CreateReview {
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing http endpoints exposed by a vtex io backend service. covers route boundaries, handler structure, middleware composition, request validation, and response modeling for service.json routes. use for webhook endpoints, partner integrations, callback apis, or reviewing vtex io handlers that should expose explicit http contracts.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing HTTP endpoints exposed by a VTEX IO backend service. Covers route boundaries, handler structure, middleware composition, request validation, and response modeling for service.json routes. Use for webhook endpoints, partner integrations, callback APIs, or reviewing VTEX IO handlers that should expose explicit HTTP contracts.
 
 # HTTP Routes & Handler Boundaries
 
@@ -3211,7 +3211,7 @@ Keep domain logic in services or integrations, and keep route handlers responsib
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when working with masterdata v2 entities, schemas, or masterdataclient in vtex io apps, or when anyone designing or implementing a solution must scrutinize whether master data is the correct storage. the skill prompts hard questions: native catalog or other vtex stores, oms, or an external database may be better; do not default to md because it is convenient. covers json schema, crud, triggers, search and scroll, schema lifecycle, purchase-path avoidance, single source of truth, and bff handoffs. use for justified custom persistence while avoiding the 60-schema limit.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when working with MasterData v2 entities, schemas, or MasterDataClient in VTEX IO apps, or when anyone designing or implementing a solution must scrutinize whether Master Data is the correct storage. The skill prompts hard questions: native Catalog or other VTEX stores, OMS, or an external database may be better; do not default to MD because it is convenient. Covers JSON Schema, CRUD, triggers, search and scroll, schema lifecycle, purchase-path avoidance, single source of truth, and BFF handoffs. Use for justified custom persistence while avoiding the 60-schema limit.
 
 # MasterData v2 Integration
 
@@ -3861,7 +3861,7 @@ export default new Service<Clients, RecorderState, ParamsContext>({
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding whether and how vtex io apps should use master data v2 for custom data. covers entity boundaries, schema lifecycle, indexing strategy, and when master data is the right storage mechanism versus another data approach. use for reviews, wishlists, forms, or other custom data modeling decisions in vtex io apps.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding whether and how VTEX IO apps should use Master Data v2 for custom data. Covers entity boundaries, schema lifecycle, indexing strategy, and when Master Data is the right storage mechanism versus another data approach. Use for reviews, wishlists, forms, or other custom data modeling decisions in VTEX IO apps.
 
 # Master Data Strategy
 
@@ -4130,7 +4130,7 @@ if (!existing) {
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when implementing localization and translated copy in vtex io apps. covers the `messages` builder, `/messages/*.json`, `context.json`, frontend message usage, and how vtex apps integrate with `vtex.messages` for runtime translation. use for storefront, admin, or backend flows that should use vtex io message infrastructure instead of hardcoded strings.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when implementing localization and translated copy in VTEX IO apps. Covers the `messages` builder, `/messages/*.json`, `context.json`, frontend message usage, and how VTEX apps integrate with `vtex.messages` for runtime translation. Use for storefront, admin, or backend flows that should use VTEX IO message infrastructure instead of hardcoded strings.
 
 # Messages & Internationalization
 
@@ -4358,7 +4358,7 @@ Use translated IDs in code, keep translation files explicit, and centralize user
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when making vtex io services easier to observe, troubleshoot, and operate in production. covers metrics, structured logging, failure visibility, rate-limit awareness, and production readiness checks for backend apps. use for integration monitoring, error diagnosis, or improving the operational quality of vtex io services before or after release.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when making VTEX IO services easier to observe, troubleshoot, and operate in production. Covers metrics, structured logging, failure visibility, rate-limit awareness, and production readiness checks for backend apps. Use for integration monitoring, error diagnosis, or improving the operational quality of VTEX IO services before or after release.
 
 # Observability & Operational Readiness
 
@@ -4522,7 +4522,7 @@ Use observability to shorten diagnosis time, not just to create more logs.
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when controlling access to vtex io app resources using role-based or resource-based policies. covers policies.json for role-based access control, service.json policies for resource-based access, vrn syntax for principals, the difference between app-to-app and user/integration access, and graphql @auth directives. use when deciding how to secure routes and restrict which apps, users, or integrations can access your endpoints.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when controlling access to VTEX IO app resources using role-based or resource-based policies. Covers policies.json for role-based access control, service.json policies for resource-based access, VRN syntax for principals, the difference between app-to-app and user/integration access, and GraphQL @auth directives. Use when deciding how to secure routes and restrict which apps, users, or integrations can access your endpoints.
 
 # VTEX IO access control (RBAC)
 
@@ -4783,7 +4783,7 @@ The `@auth` directive checks the caller's License Manager role for the specified
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building react components under react/ or configuring store blocks in store/ for vtex io apps. covers interfaces.json, contentschemas.json for site editor, vtex styleguide for admin apps, and css-handles for storefront styling. use for creating custom storefront components, admin panels, pixel apps, or any frontend development within the vtex io react builder ecosystem.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building React components under react/ or configuring store blocks in store/ for VTEX IO apps. Covers interfaces.json, contentSchemas.json for Site Editor, VTEX Styleguide for admin apps, and css-handles for storefront styling. Use for creating custom storefront components, admin panels, pixel apps, or any frontend development within the VTEX IO react builder ecosystem.
 
 # Frontend React Components & Hooks
 
@@ -5222,7 +5222,7 @@ Using the component in a Store Framework theme:
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when connecting react components to store framework blocks and render-runtime behavior in vtex io. covers interfaces.json, block registration, block composition, and how storefront components become configurable theme blocks. use for block mapping, theme integration, or reviewing whether a react component is correctly exposed to store framework.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when connecting React components to Store Framework blocks and render-runtime behavior in VTEX IO. Covers interfaces.json, block registration, block composition, and how storefront components become configurable theme blocks. Use for block mapping, theme integration, or reviewing whether a React component is correctly exposed to Store Framework.
 
 # Render Runtime & Block Registration
 
@@ -5456,7 +5456,7 @@ This wiring makes the block name visible in the theme, maps it to a real React e
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building vtex io apps that must work correctly in multi-binding stores where bindings use path prefixes (e.g. store.com/us/, store.com/br/). covers rootpath extraction from x-vtex-root-path header, useruntime().rootpath in react, url construction in backends, link generation, asset paths, and api route considerations. use when the app breaks or produces wrong urls in cross-border or multi-binding setups.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building VTEX IO apps that must work correctly in multi-binding stores where bindings use path prefixes (e.g. store.com/us/, store.com/br/). Covers rootPath extraction from x-vtex-root-path header, useRuntime().rootPath in React, URL construction in backends, link generation, asset paths, and API route considerations. Use when the app breaks or produces wrong URLs in cross-border or multi-binding setups.
 
 # VTEX IO rootPath for multi-binding stores
 
@@ -5689,7 +5689,7 @@ const { rootPath, binding } = useRuntime();
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when reviewing or designing security-sensitive boundaries in vtex io apps. covers public versus private exposure, trust assumptions at route and integration boundaries, sensitive data handling, validating what crosses the app boundary, and avoiding leakage across accounts, workspaces, users, or integrations. use for route hardening, data exposure review, or evaluating whether a service boundary is too permissive.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when reviewing or designing security-sensitive boundaries in VTEX IO apps. Covers public versus private exposure, trust assumptions at route and integration boundaries, sensitive data handling, validating what crosses the app boundary, and avoiding leakage across accounts, workspaces, users, or integrations. Use for route hardening, data exposure review, or evaluating whether a service boundary is too permissive.
 
 # Security Boundaries & Exposure Review
 
@@ -5864,7 +5864,7 @@ Use minimal request and response shapes, explicit validation, and scoped context
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building backend service apps under node/ in a vtex io project or configuring service.json routes. covers the service class, middleware functions, ctx.clients pattern, janusclient, externalclient, masterdataclient, and ioclients registration. use for implementing backend apis, event handlers, or integrations that must use @vtex/api clients instead of raw http libraries.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building backend service apps under node/ in a VTEX IO project or configuring service.json routes. Covers the Service class, middleware functions, ctx.clients pattern, JanusClient, ExternalClient, MasterDataClient, and IOClients registration. Use for implementing backend APIs, event handlers, or integrations that must use @vtex/api clients instead of raw HTTP libraries.
 
 # Backend Service Apps & API Clients
 
@@ -6233,7 +6233,7 @@ export default new Service<Clients, RecorderState, ParamsContext>({
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing vtex io configuration apps with the configuration builder or when a service app must receive structured configuration through runtime context. covers the separation between service apps and configuration apps, schema.json and configuration.json, settingstype, and reading injected configuration through ctx.vtex.settings. use for shared service configuration, decoupled configuration lifecycle, or reviewing whether app settings should be replaced by a configuration app.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing VTEX IO configuration apps with the configuration builder or when a service app must receive structured configuration through runtime context. Covers the separation between service apps and configuration apps, schema.json and configuration.json, settingsType, and reading injected configuration through ctx.vtex.settings. Use for shared service configuration, decoupled configuration lifecycle, or reviewing whether app settings should be replaced by a configuration app.
 
 # Service Configuration Apps
 
@@ -6575,7 +6575,7 @@ Use this approach when configuration should be shared, versioned, and injected b
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining service.json routes, choosing public vs segment vs private url prefixes for vtex io services, or setting http cache headers that interact with the vtex edge and cdn. covers path patterns, cookie visibility, edge caching behavior, and aligning cache-control with data sensitivity. use for node or .net io backends where request path and response headers determine cdn safety.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining service.json routes, choosing public vs segment vs private URL prefixes for VTEX IO services, or setting HTTP cache headers that interact with the VTEX edge and CDN. Covers path patterns, cookie visibility, edge caching behavior, and aligning Cache-Control with data sensitivity. Use for Node or .NET IO backends where request path and response headers determine CDN safety.
 
 # VTEX IO service paths and CDN behavior
 
@@ -6664,7 +6664,7 @@ Routes that return **authenticated shopper data**, **PII**, or **authorization-s
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing the runtime structure of a vtex io backend app under node/. covers the service entrypoint, typed context and state, service.json runtime configuration, and how routes, events, and graphql handlers are registered and executed. use for structuring backend apps, defining runtime boundaries, or fixing execution-model issues in vtex io services.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing the runtime structure of a VTEX IO backend app under node/. Covers the Service entrypoint, typed context and state, service.json runtime configuration, and how routes, events, and GraphQL handlers are registered and executed. Use for structuring backend apps, defining runtime boundaries, or fixing execution-model issues in VTEX IO services.
 
 # Service Runtime & Execution Model
 
@@ -7027,7 +7027,7 @@ If `routes/index.ts` or `events/index.ts` grows too large, split it by domain su
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building or debugging a vtex io session transform app (vtex.session integration). covers namespace ownership, input-vs-output fields, transform ordering (dag), public-as-input vs private-as-read model, cross-namespace propagation, configuration.json contracts, caching inside transforms, and frontend session consumption. use when designing session-derived state for b2b, pricing, regionalization, or custom storefront context.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building or debugging a VTEX IO session transform app (vtex.session integration). Covers namespace ownership, input-vs-output fields, transform ordering (DAG), public-as-input vs private-as-read model, cross-namespace propagation, configuration.json contracts, caching inside transforms, and frontend session consumption. Use when designing session-derived state for B2B, pricing, regionalization, or custom storefront context.
 
 # VTEX IO session transform apps
 
@@ -7330,7 +7330,7 @@ Your transform sits at the **end** of whatever dependency chain it requires. Dec
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building vtex io storefront components under react/ for store framework experiences. covers storefront component structure, css-handles, storefront context hooks, browser-safe data fetching, and how components should behave when used as theme blocks. use for custom storefront ui, product widgets, banners, forms, or reviewing shopper-facing react code in vtex io apps.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building VTEX IO storefront components under react/ for Store Framework experiences. Covers storefront component structure, css-handles, storefront context hooks, browser-safe data fetching, and how components should behave when used as theme blocks. Use for custom storefront UI, product widgets, banners, forms, or reviewing shopper-facing React code in VTEX IO apps.
 
 # Storefront React Components
 
@@ -7485,7 +7485,7 @@ export function MyComponent() {
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or modifying a vtex io storefront theme app — the app that owns `store/blocks.json`, `store/routes.json`, `store/templates/`, `store/contentschemas.json`, and the storefront page tree assembled from `store.home`, `store.product`, `store.search`, `store.custom`, and other native page templates. covers how a theme app extends a base theme, declares routes, composes blocks across pages, and how its `store/` files relate to merchant site editor content. use for theme scaffolding, custom page routes, theme-level overrides, or reviewing whether a change belongs in the theme app, in a component app, or in app settings.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or modifying a VTEX IO storefront theme app — the app that owns `store/blocks.json`, `store/routes.json`, `store/templates/`, `store/contentSchemas.json`, and the storefront page tree assembled from `store.home`, `store.product`, `store.search`, `store.custom`, and other native page templates. Covers how a theme app extends a base theme, declares routes, composes blocks across pages, and how its `store/` files relate to merchant Site Editor content. Use for theme scaffolding, custom page routes, theme-level overrides, or reviewing whether a change belongs in the theme app, in a component app, or in app settings.
 
 # Storefront Theme App
 
@@ -7811,7 +7811,7 @@ Merchant edits to `text` are persisted by `vtex.pages-graphql` under a key that 
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when installing, publishing, upgrading, or rolling back a vtex io storefront theme app (`vendor.store-theme` or any app that owns `store/blocks.json`, `store/routes.json`, and `store/contentschemas.json`). covers how site editor and theme content are scoped by the app's major version, why a major version bump leaves the new major with no merchant content and silently falls back to default theme content, the safe install-in-workspace, migrate- content with the `updatethemeids` mutation, smoke-test, then promote workflow, the 3-way mine-wins merge that `vtex workspace promote` performs against `vtex.pages-graphql` vbase (with automatic per-minute `userdata_backup` snapshots when conflicts are resolved), and the support-led recovery path. use for any operation that changes which version of a content-holding app is installed in `master`.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when installing, publishing, upgrading, or rolling back a VTEX IO storefront theme app (`vendor.store-theme` or any app that owns `store/blocks.json`, `store/routes.json`, and `store/contentSchemas.json`). Covers how Site Editor and theme content are scoped by the app's MAJOR version, why a major version bump leaves the new major with no merchant content and silently falls back to default theme content, the safe install-in-workspace, migrate- content with the `updateThemeIds` mutation, smoke-test, then promote workflow, the 3-way mine-wins merge that `vtex workspace promote` performs against `vtex.pages-graphql` VBase (with automatic per-minute `userData_backup` snapshots when conflicts are resolved), and the support-led recovery path. Use for any operation that changes which version of a content-holding app is installed in `master`.
 
 # Storefront Theme Versioning, Install, and Rollback
 

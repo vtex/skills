@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building vtex io storefront components under react/ for store framework experiences. covers storefront component structure, css-handles, storefront context hooks, browser-safe data fetching, and how components should behave when used as theme blocks. use for custom storefront ui, product widgets, banners, forms, or reviewing shopper-facing react code in vtex io apps.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building VTEX IO storefront components under react/ for Store Framework experiences. Covers storefront component structure, css-handles, storefront context hooks, browser-safe data fetching, and how components should behave when used as theme blocks. Use for custom storefront UI, product widgets, banners, forms, or reviewing shopper-facing React code in VTEX IO apps.
 
 # Storefront React Components
 

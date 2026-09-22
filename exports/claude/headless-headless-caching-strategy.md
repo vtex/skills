@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when implementing caching logic, cdn configuration, or performance optimization for a headless vtex storefront. covers which vtex apis can be cached (intelligent search, catalog) versus which must never be cached (checkout, profile, oms), stale-while-revalidate patterns, cache invalidation, and bff-level caching. use for any headless project that needs ttl rules and caching strategy guidance.
+This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when implementing caching logic, CDN configuration, or performance optimization for a headless VTEX storefront. Covers which VTEX APIs can be cached (Intelligent Search, Catalog) versus which must never be cached (Checkout, Profile, OMS), stale-while-revalidate patterns, cache invalidation, and BFF-level caching. Use for any headless project that needs TTL rules and caching strategy guidance.
 
 # Caching & Performance for Headless VTEX
 

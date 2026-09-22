@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing idempotency logic in payment connector code or handling duplicate payment requests. covers paymentid as idempotency key, payment state machine transitions, retry semantics for cancellation and refund operations, and requestid handling. use for preventing duplicate charges and ensuring correct gateway retry behavior across create payment, cancel, capture, and refund endpoints.
+This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing idempotency logic in payment connector code or handling duplicate payment requests. Covers paymentId as idempotency key, payment state machine transitions, retry semantics for cancellation and refund operations, and requestId handling. Use for preventing duplicate charges and ensuring correct Gateway retry behavior across Create Payment, Cancel, Capture, and Refund endpoints.
 
 # Idempotency & Duplicate Prevention
 

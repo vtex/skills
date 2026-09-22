@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when implementing order integration hooks, feeds, or webhook handlers for vtex marketplace connectors. covers feed v3 (pull) vs hook (push), filter types (fromworkflow and fromorders), order status lifecycle, payload validation, and idempotent processing. use for building order integrations between vtex marketplaces and external systems such as erps, wms, or fulfillment services.
+This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when implementing order integration hooks, feeds, or webhook handlers for VTEX marketplace connectors. Covers Feed v3 (pull) vs Hook (push), filter types (FromWorkflow and FromOrders), order status lifecycle, payload validation, and idempotent processing. Use for building order integrations between VTEX marketplaces and external systems such as ERPs, WMS, or fulfillment services.
 
 # Order Integration & Webhooks
 

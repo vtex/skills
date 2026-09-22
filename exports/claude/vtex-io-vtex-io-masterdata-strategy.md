@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding whether and how vtex io apps should use master data v2 for custom data. covers entity boundaries, schema lifecycle, indexing strategy, and when master data is the right storage mechanism versus another data approach. use for reviews, wishlists, forms, or other custom data modeling decisions in vtex io apps.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding whether and how VTEX IO apps should use Master Data v2 for custom data. Covers entity boundaries, schema lifecycle, indexing strategy, and when Master Data is the right storage mechanism versus another data approach. Use for reviews, wishlists, forms, or other custom data modeling decisions in VTEX IO apps.
 
 # Master Data Strategy
 

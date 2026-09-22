@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining or changing the contract of a vtex io app through manifest.json, builder declarations, dependencies, peerdependencies, billingoptions, and app identity. covers how the app declares capabilities and integration boundaries. use for scaffolding apps, splitting responsibilities across apps, or fixing contract-level link and publish issues.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining or changing the contract of a VTEX IO app through manifest.json, builder declarations, dependencies, peerDependencies, billingOptions, and app identity. Covers how the app declares capabilities and integration boundaries. Use for scaffolding apps, splitting responsibilities across apps, or fixing contract-level link and publish issues.
 
 # App Contract & Builder Boundaries
 

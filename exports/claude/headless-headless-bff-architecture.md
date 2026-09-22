@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when designing or modifying a bff (backend-for-frontend) layer, middleware, or api proxy for a headless vtex storefront. covers bff middleware architecture, public vs private api classification, vtexidclientautcookie management, api key protection, and secure request proxying. use for any headless commerce project that must never expose vtex_app_key or call private vtex apis from the browser.
+This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when designing or modifying a BFF (Backend-for-Frontend) layer, middleware, or API proxy for a headless VTEX storefront. Covers BFF middleware architecture, public vs private API classification, VtexIdclientAutCookie management, API key protection, and secure request proxying. Use for any headless commerce project that must never expose VTEX_APP_KEY or call private VTEX APIs from the browser.
 
 # BFF Layer Design & Security
 

@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building react components under react/ or configuring store blocks in store/ for vtex io apps. covers interfaces.json, contentschemas.json for site editor, vtex styleguide for admin apps, and css-handles for storefront styling. use for creating custom storefront components, admin panels, pixel apps, or any frontend development within the vtex io react builder ecosystem.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building React components under react/ or configuring store blocks in store/ for VTEX IO apps. Covers interfaces.json, contentSchemas.json for Site Editor, VTEX Styleguide for admin apps, and css-handles for storefront styling. Use for creating custom storefront components, admin panels, pixel apps, or any frontend development within the VTEX IO react builder ecosystem.
 
 # Frontend React Components & Hooks
 

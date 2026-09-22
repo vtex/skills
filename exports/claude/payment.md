@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing asynchronous payment methods (boleto, pix, bank redirects) or working with callback urls in payment connector code. covers undefined status response, callbackurl notification, x-vtex-signature validation, sync vs async handling, correct delaytocancel configuration for each async method, and redirect-based flows where inboundrequestsurl does not support browser get redirects (requires custom public routes).
+This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing asynchronous payment methods (Boleto, Pix, bank redirects) or working with callback URLs in payment connector code. Covers undefined status response, callbackUrl notification, X-VTEX-signature validation, sync vs async handling, correct delayToCancel configuration for each async method, and redirect-based flows where inboundRequestsUrl does not support browser GET redirects (requires custom public routes).
 
 # Asynchronous Payment Flows & Callbacks
 
@@ -709,7 +709,7 @@ async function notifyGateway(callbackUrl: string, payload: object): Promise<void
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing idempotency logic in payment connector code or handling duplicate payment requests. covers paymentid as idempotency key, payment state machine transitions, retry semantics for cancellation and refund operations, and requestid handling. use for preventing duplicate charges and ensuring correct gateway retry behavior across create payment, cancel, capture, and refund endpoints.
+This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing idempotency logic in payment connector code or handling duplicate payment requests. Covers paymentId as idempotency key, payment state machine transitions, retry semantics for cancellation and refund operations, and requestId handling. Use for preventing duplicate charges and ensuring correct Gateway retry behavior across Create Payment, Cancel, Capture, and Refund endpoints.
 
 # Idempotency & Duplicate Prevention
 
@@ -1079,7 +1079,7 @@ async function cancelPaymentHandler(req: Request, res: Response): Promise<void> 
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when handling credit card data, implementing secureproxyurl flows, or working with payment security and proxy code. covers pci dss compliance, secure proxy card tokenization, sensitive data handling rules, x-provider-forward-to header usage, custom token creation, and the constraint that secure proxy applies only to card authorization (not post-auth operations like cancel, capture, or refund). use for any payment connector that processes credit, debit, or co-branded card payments to prevent data breaches and pci violations.
+This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when handling credit card data, implementing secureProxyUrl flows, or working with payment security and proxy code. Covers PCI DSS compliance, Secure Proxy card tokenization, sensitive data handling rules, X-PROVIDER-Forward-To header usage, custom token creation, and the constraint that Secure Proxy applies only to card authorization (not post-auth operations like cancel, capture, or refund). Use for any payment connector that processes credit, debit, or co-branded card payments to prevent data breaches and PCI violations.
 
 # PCI Compliance & Secure Proxy
 
@@ -1660,7 +1660,7 @@ function safePaymentLog(label: string, body: Record<string, unknown>): void {
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing a vtex payment provider protocol connector for point of sale (pos) payments on vtex sales app. covers venda direta credito and venda direta debito manifest methods, the two-phase payment app challenge (terminal connector then wait-for-confirmation), null card data on create payment, asynchronous undefined status, timeout pairing of secondswaiting and delaytocancel, and callback payloads with cardbrand, firstdigits, and lastdigits. use for building or debugging ppp + pos integrations that charge a physical card on a payment terminal.
+This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing a VTEX Payment Provider Protocol connector for Point of Sale (POS) payments on VTEX Sales App. Covers Venda Direta Credito and Venda Direta Debito manifest methods, the two-phase Payment App challenge (terminal connector then wait-for-confirmation), null card data on Create Payment, asynchronous undefined status, timeout pairing of secondsWaiting and delayToCancel, and callback payloads with cardBrand, firstDigits, and lastDigits. Use for building or debugging PPP + POS integrations that charge a physical card on a payment terminal.
 
 # PPP Applied to POS (VTEX Sales App)
 
@@ -2246,7 +2246,7 @@ Other payment / Sales App skills:
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when designing or implementing a payment connector in vtex io. covers ppf implementation, typescript 3.9.7 builder-hub constraints and safe dependency resolutions, configuration.json schema validation, paymentproviderservice clients wiring, secure proxy scope (authorize-only), externalclient vs secureexternalclient patterns, iocontext access, ppf response helpers, psp integration checklist, and vtex link debugging. use for any implementation of a payment connector hosted in vtex io.
+This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when designing or implementing a Payment Connector in VTEX IO. Covers PPF implementation, TypeScript 3.9.7 builder-hub constraints and safe dependency resolutions, configuration.json schema validation, PaymentProviderService clients wiring, Secure Proxy scope (authorize-only), ExternalClient vs SecureExternalClient patterns, IOContext access, PPF response helpers, PSP integration checklist, and vtex link debugging. Use for any implementation of a Payment Connector hosted in VTEX IO.
 
 # Payment Provider Framework (VTEX IO)
 
@@ -3027,7 +3027,7 @@ Replace all example vendor names, endpoints, and credentials with values for you
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing a vtex payment provider protocol (ppp) connector or working with payment/connector endpoint files. covers all nine required endpoints: manifest, create payment, cancel, capture/settle, refund, inbound request, create auth token, provider auth redirect, and get credentials. use for building or debugging any payment connector that integrates with the vtex payment gateway.
+This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing a VTEX Payment Provider Protocol (PPP) connector or working with payment/connector endpoint files. Covers all nine required endpoints: Manifest, Create Payment, Cancel, Capture/Settle, Refund, Inbound Request, Create Auth Token, Provider Auth Redirect, and Get Credentials. Use for building or debugging any payment connector that integrates with the VTEX Payment Gateway.
 
 # PPP Endpoint Implementation
 

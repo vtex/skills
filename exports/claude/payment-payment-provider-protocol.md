@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing a vtex payment provider protocol (ppp) connector or working with payment/connector endpoint files. covers all nine required endpoints: manifest, create payment, cancel, capture/settle, refund, inbound request, create auth token, provider auth redirect, and get credentials. use for building or debugging any payment connector that integrates with the vtex payment gateway.
+This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing a VTEX Payment Provider Protocol (PPP) connector or working with payment/connector endpoint files. Covers all nine required endpoints: Manifest, Create Payment, Cancel, Capture/Settle, Refund, Inbound Request, Create Auth Token, Provider Auth Redirect, and Get Credentials. Use for building or debugging any payment connector that integrates with the VTEX Payment Gateway.
 
 # PPP Endpoint Implementation
 

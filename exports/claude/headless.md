@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when designing or modifying a bff (backend-for-frontend) layer, middleware, or api proxy for a headless vtex storefront. covers bff middleware architecture, public vs private api classification, vtexidclientautcookie management, api key protection, and secure request proxying. use for any headless commerce project that must never expose vtex_app_key or call private vtex apis from the browser.
+This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when designing or modifying a BFF (Backend-for-Frontend) layer, middleware, or API proxy for a headless VTEX storefront. Covers BFF middleware architecture, public vs private API classification, VtexIdclientAutCookie management, API key protection, and secure request proxying. Use for any headless commerce project that must never expose VTEX_APP_KEY or call private VTEX APIs from the browser.
 
 # BFF Layer Design & Security
 
@@ -543,7 +543,7 @@ authRoutes.get("/status", (req: Request, res: Response) => {
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when implementing caching logic, cdn configuration, or performance optimization for a headless vtex storefront. covers which vtex apis can be cached (intelligent search, catalog) versus which must never be cached (checkout, profile, oms), stale-while-revalidate patterns, cache invalidation, and bff-level caching. use for any headless project that needs ttl rules and caching strategy guidance.
+This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when implementing caching logic, CDN configuration, or performance optimization for a headless VTEX storefront. Covers which VTEX APIs can be cached (Intelligent Search, Catalog) versus which must never be cached (Checkout, Profile, OMS), stale-while-revalidate patterns, cache invalidation, and BFF-level caching. Use for any headless project that needs TTL rules and caching strategy guidance.
 
 # Caching & Performance for Headless VTEX
 
@@ -1137,7 +1137,7 @@ app.use("/api/bff/profile", cacheHeaders("no-cache"), profileRoutes);
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when implementing cart, checkout, or order placement logic proxied through a bff for headless vtex storefronts. covers orderform lifecycle, cart creation, item management, profile/shipping/payment attachments, orderformid management, and secure checkout flows. use for any headless frontend that needs to proxy vtex checkout api calls through a server-side layer with proper session cookie handling.
+This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when implementing cart, checkout, or order placement logic proxied through a BFF for headless VTEX storefronts. Covers OrderForm lifecycle, cart creation, item management, profile/shipping/payment attachments, orderFormId management, and secure checkout flows. Use for any headless frontend that needs to proxy VTEX Checkout API calls through a server-side layer with proper session cookie handling.
 
 # Checkout API Proxy & OrderForm Management
 
@@ -2053,7 +2053,7 @@ async function placeOrderWithCard(card: CardPaymentInformation) {
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when implementing search functionality, faceted navigation, or autocomplete in a headless vtex storefront. covers product_search, autocomplete_suggestions, facets, banners, correction_search, and top_searches endpoints, plus analytics event collection. use for any custom frontend that integrates vtex intelligent search api for product discovery and search result rendering.
+This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when implementing search functionality, faceted navigation, or autocomplete in a headless VTEX storefront. Covers product_search, autocomplete_suggestions, facets, banners, correction_search, and top_searches endpoints, plus analytics event collection. Use for any custom frontend that integrates VTEX Intelligent Search API for product discovery and search result rendering.
 
 # Intelligent Search API Integration
 
