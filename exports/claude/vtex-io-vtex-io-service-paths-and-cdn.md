@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining service.json routes, choosing public vs segment vs private url prefixes for vtex io services, or setting http cache headers that interact with the vtex edge and cdn. covers path patterns, cookie visibility, edge caching behavior, and aligning cache-control with data sensitivity. use for node or .net io backends where request path and response headers determine cdn safety.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining service.json routes, choosing public vs segment vs private URL prefixes for VTEX IO services, or setting HTTP cache headers that interact with the VTEX edge and CDN. Covers path patterns, cookie visibility, edge caching behavior, and aligning Cache-Control with data sensitivity. Use for Node or .NET IO backends where request path and response headers determine CDN safety.
 
 # VTEX IO service paths and CDN behavior
 

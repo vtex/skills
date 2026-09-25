@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when implementing localization and translated copy in vtex io apps. covers the `messages` builder, `/messages/*.json`, `context.json`, frontend message usage, and how vtex apps integrate with `vtex.messages` for runtime translation. use for storefront, admin, or backend flows that should use vtex io message infrastructure instead of hardcoded strings.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when implementing localization and translated copy in VTEX IO apps. Covers the `messages` builder, `/messages/*.json`, `context.json`, frontend message usage, and how VTEX apps integrate with `vtex.messages` for runtime translation. Use for storefront, admin, or backend flows that should use VTEX IO message infrastructure instead of hardcoded strings.
 
 # Messages & Internationalization
 

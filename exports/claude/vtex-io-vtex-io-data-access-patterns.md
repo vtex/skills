@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding where and how a vtex io app should store and read data. covers when to use app settings, configuration apps, master data, vbase, vtex core apis, or external stores, and how to avoid duplicating sources of truth or abusing configuration stores for operational data. use for new data flows, caching decisions, refactors, or reviewing suspicious storage and access patterns in vtex io apps.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding where and how a VTEX IO app should store and read data. Covers when to use app settings, configuration apps, Master Data, VBase, VTEX core APIs, or external stores, and how to avoid duplicating sources of truth or abusing configuration stores for operational data. Use for new data flows, caching decisions, refactors, or reviewing suspicious storage and access patterns in VTEX IO apps.
 
 # Data Access & Storage Patterns
 

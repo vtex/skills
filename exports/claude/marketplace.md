@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when building catalog or sku synchronization logic for vtex marketplace seller connectors. covers the changenotification endpoint, sku suggestion lifecycle, product data mapping, price and inventory sync, and fulfillment simulation. use for implementing seller-side catalog integration that pushes skus to vtex marketplaces with proper notification handling and rate-limited batch synchronization.
+This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when building catalog or SKU synchronization logic for VTEX marketplace seller connectors. Covers the changenotification endpoint, SKU suggestion lifecycle, product data mapping, price and inventory sync, and fulfillment simulation. Use for implementing seller-side catalog integration that pushes SKUs to VTEX marketplaces with proper notification handling and rate-limited batch synchronization.
 
 # Catalog & SKU Integration
 
@@ -669,7 +669,7 @@ const fastFulfillmentSimulation: RequestHandler = async (req, res) => {
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when implementing fulfillment, invoice, or tracking logic for vtex marketplace seller connectors. covers the external seller fulfillment protocol: fulfillment simulation (checkout and indexation), order placement with reservation id, order dispatch (authorize fulfillment), oms invoice and tracking apis, and partial invoicing. use for seller-side services that must answer within the simulation sla and integrate with vtex marketplace order management.
+This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when implementing fulfillment, invoice, or tracking logic for VTEX marketplace seller connectors. Covers the External Seller fulfillment protocol: fulfillment simulation (checkout and indexation), order placement with reservation id, order dispatch (authorize fulfillment), OMS invoice and tracking APIs, and partial invoicing. Use for seller-side services that must answer within the simulation SLA and integrate with VTEX marketplace order management.
 
 # Fulfillment, simulation, orders & OMS follow-up
 
@@ -1523,7 +1523,7 @@ VTEX also maintains an open **reference implementation** for the External Seller
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when implementing order integration hooks, feeds, or webhook handlers for vtex marketplace connectors. covers feed v3 (pull) vs hook (push), filter types (fromworkflow and fromorders), order status lifecycle, payload validation, and idempotent processing. use for building order integrations between vtex marketplaces and external systems such as erps, wms, or fulfillment services.
+This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when implementing order integration hooks, feeds, or webhook handlers for VTEX marketplace connectors. Covers Feed v3 (pull) vs Hook (push), filter types (FromWorkflow and FromOrders), order status lifecycle, payload validation, and idempotent processing. Use for building order integrations between VTEX marketplaces and external systems such as ERPs, WMS, or fulfillment services.
 
 # Order Integration & Webhooks
 
@@ -2272,7 +2272,7 @@ async function enqueueOrderEvent(payload: HookPayload): Promise<void> {
 
 ---
 
-This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when implementing retry logic, rate limit handling, or resilience patterns in vtex api integrations. covers vtex rate limit headers (x-ratelimit-remaining, x-ratelimit-reset, retry-after), 429 status handling, exponential backoff with jitter, circuit breaker patterns, and request queuing. use for any vtex marketplace integration that must gracefully handle api throttling and maintain high availability.
+This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when implementing retry logic, rate limit handling, or resilience patterns in VTEX API integrations. Covers VTEX rate limit headers (X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After), 429 status handling, exponential backoff with jitter, circuit breaker patterns, and request queuing. Use for any VTEX marketplace integration that must gracefully handle API throttling and maintain high availability.
 
 # API Rate Limiting & Resilience
 

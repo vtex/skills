@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX FastStore Implementation & Customization. Apply these constraints and patterns when assisting developers with core coding rules and workflow for developing vtex faststore storefronts. use when starting any faststore development task, writing typescript/react components, creating section overrides, extending the bff, or styling. covers all primary conventions, safety rules, and the development workflow used across every faststore project.
+This skill provides guidance for AI agents working with VTEX FastStore Implementation & Customization. Apply these constraints and patterns when assisting developers with core coding rules and workflow for developing VTEX FastStore storefronts. Use when starting any FastStore development task, writing TypeScript/React components, creating section overrides, extending the BFF, or styling. Covers all primary conventions, safety rules, and the development workflow used across every FastStore project.
 
 # FastStore Storefront — Coding Rules
 

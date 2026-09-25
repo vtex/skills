@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing asynchronous payment methods (boleto, pix, bank redirects) or working with callback urls in payment connector code. covers undefined status response, callbackurl notification, x-vtex-signature validation, sync vs async handling, correct delaytocancel configuration for each async method, and redirect-based flows where inboundrequestsurl does not support browser get redirects (requires custom public routes).
+This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when implementing asynchronous payment methods (Boleto, Pix, bank redirects) or working with callback URLs in payment connector code. Covers undefined status response, callbackUrl notification, X-VTEX-signature validation, sync vs async handling, correct delayToCancel configuration for each async method, and redirect-based flows where inboundRequestsUrl does not support browser GET redirects (requires custom public routes).
 
 # Asynchronous Payment Flows & Callbacks
 
@@ -15,6 +15,7 @@ Do not use this skill for:
 - PPP endpoint contracts and response shapes — use [`payment-provider-protocol`](../payment-provider-protocol/skill.md)
 - `paymentId`/`requestId` idempotency and state machine logic — use [`payment-idempotency`](../payment-idempotency/skill.md)
 - PCI compliance and Secure Proxy card handling — use [`payment-pci-security`](../payment-pci-security/skill.md)
+- POS / VTEX Sales App terminal payments (`Venda Direta Credito`, `Venda Direta Debito`, Payment Apps) — use [`payment-ppp-pos`](../payment-ppp-pos/skill.md)
 
 ## Decision rules
 
@@ -695,6 +696,7 @@ async function notifyGateway(callbackUrl: string, payload: object): Promise<void
 - [`payment-provider-protocol`](../payment-provider-protocol/skill.md) — Endpoint contracts and response shapes
 - [`payment-idempotency`](../payment-idempotency/skill.md) — `paymentId`/`requestId` idempotency and state machine
 - [`payment-pci-security`](../payment-pci-security/skill.md) — PCI compliance and Secure Proxy
+- [`payment-ppp-pos`](../payment-ppp-pos/skill.md) — POS / Sales App terminal flow; not Pix/Boleto
 
 ## Reference
 

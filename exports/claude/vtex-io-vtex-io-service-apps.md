@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building backend service apps under node/ in a vtex io project or configuring service.json routes. covers the service class, middleware functions, ctx.clients pattern, janusclient, externalclient, masterdataclient, and ioclients registration. use for implementing backend apis, event handlers, or integrations that must use @vtex/api clients instead of raw http libraries.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building backend service apps under node/ in a VTEX IO project or configuring service.json routes. Covers the Service class, middleware functions, ctx.clients pattern, JanusClient, ExternalClient, MasterDataClient, and IOClients registration. Use for implementing backend APIs, event handlers, or integrations that must use @vtex/api clients instead of raw HTTP libraries.
 
 # Backend Service Apps & API Clients
 

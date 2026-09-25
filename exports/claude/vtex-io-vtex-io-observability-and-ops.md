@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when making vtex io services easier to observe, troubleshoot, and operate in production. covers metrics, structured logging, failure visibility, rate-limit awareness, and production readiness checks for backend apps. use for integration monitoring, error diagnosis, or improving the operational quality of vtex io services before or after release.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when making VTEX IO services easier to observe, troubleshoot, and operate in production. Covers metrics, structured logging, failure visibility, rate-limit awareness, and production readiness checks for backend apps. Use for integration monitoring, error diagnosis, or improving the operational quality of VTEX IO services before or after release.
 
 # Observability & Operational Readiness
 

@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing http endpoints exposed by a vtex io backend service. covers route boundaries, handler structure, middleware composition, request validation, and response modeling for service.json routes. use for webhook endpoints, partner integrations, callback apis, or reviewing vtex io handlers that should expose explicit http contracts.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing HTTP endpoints exposed by a VTEX IO backend service. Covers route boundaries, handler structure, middleware composition, request validation, and response modeling for service.json routes. Use for webhook endpoints, partner integrations, callback APIs, or reviewing VTEX IO handlers that should expose explicit HTTP contracts.
 
 # HTTP Routes & Handler Boundaries
 

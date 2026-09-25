@@ -21,3 +21,4 @@ Extension development for VTEX Sales App, the in-store assisted selling applicat
 
 - [FastStore Implementation](../faststore/index.md) — storefront customization outside Sales App.
 - [Custom VTEX IO Apps](../vtex-io/index.md) — building IO proxy apps for secure API integration.
+- [Payment Connector Development](../payment/index.md) — for in-store card-on-terminal payments, use [`payment-ppp-pos`](../payment/skills/payment-ppp-pos/skill.md). This Sales App track covers UI extensions, not POS connectors.

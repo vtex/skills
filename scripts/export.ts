@@ -89,6 +89,16 @@ function normalizeDescription(desc: string): string {
   return desc.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Splice a skill description into an existing sentence: lowercase only the first
+ * character so product names (VTEX Sales App, POS, PPP) keep their source casing.
+ */
+function asSentenceContinuation(desc: string): string {
+  const normalized = normalizeDescription(desc);
+  const withPeriod = normalized.endsWith(".") ? normalized : `${normalized}.`;
+  return withPeriod.charAt(0).toLowerCase() + withPeriod.slice(1);
+}
+
 // ─── Companion File Helpers ─────────────────────────────────────────────────
 
 interface CompanionFile {
@@ -126,7 +136,7 @@ function getCompanionFiles(skill: Skill): CompanionFile[] {
       } catch { continue; }
 
       companions.push({
-        relativePath: join(entry, file),
+        relativePath: join(entry, file).replace(/\\/g, "/"),
         fileName: file,
         dirName: entry,
         content: readFileSync(filePath, "utf-8"),
@@ -332,10 +342,10 @@ ${sections.join("\n\n---\n\n")}
 // ─── Claude Projects Exporter ───────────────────────────────────────────────
 
 function buildClaudeSkillMd(skill: Skill): string {
-  const desc = normalizeDescription(skill.frontmatter.description);
-   const trackTitle = formatTrackTitle(resolveField<string>(skill.frontmatter, 'track') ?? skill.frontmatter.track);
+  const desc = asSentenceContinuation(skill.frontmatter.description);
+  const trackTitle = formatTrackTitle(resolveField<string>(skill.frontmatter, 'track') ?? skill.frontmatter.track);
 
-  return `This skill provides guidance for AI agents working with VTEX ${trackTitle}. Apply these constraints and patterns when assisting developers with ${desc.toLowerCase().endsWith(".") ? desc.toLowerCase() : desc.toLowerCase() + "."}
+  return `This skill provides guidance for AI agents working with VTEX ${trackTitle}. Apply these constraints and patterns when assisting developers with ${desc}
 
 ${skill.content.trim()}
 `;
@@ -345,8 +355,8 @@ function buildClaudeTrackMd(track: Track): string {
   const trackTitle = formatTrackTitle(track.name);
 
   const sections = track.skills.map((skill) => {
-    const desc = normalizeDescription(skill.frontmatter.description);
-    return `This skill provides guidance for AI agents working with VTEX ${trackTitle}. Apply these constraints and patterns when assisting developers with ${desc.toLowerCase().endsWith(".") ? desc.toLowerCase() : desc.toLowerCase() + "."}
+    const desc = asSentenceContinuation(skill.frontmatter.description);
+    return `This skill provides guidance for AI agents working with VTEX ${trackTitle}. Apply these constraints and patterns when assisting developers with ${desc}
 
 ${skill.content.trim()}`;
   });

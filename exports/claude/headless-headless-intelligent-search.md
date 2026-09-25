@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when implementing search functionality, faceted navigation, or autocomplete in a headless vtex storefront. covers product_search, autocomplete_suggestions, facets, banners, correction_search, and top_searches endpoints, plus analytics event collection. use for any custom frontend that integrates vtex intelligent search api for product discovery and search result rendering.
+This skill provides guidance for AI agents working with VTEX Headless Front-End Development. Apply these constraints and patterns when assisting developers with apply when implementing search functionality, faceted navigation, or autocomplete in a headless VTEX storefront. Covers product_search, autocomplete_suggestions, facets, banners, correction_search, and top_searches endpoints, plus analytics event collection. Use for any custom frontend that integrates VTEX Intelligent Search API for product discovery and search result rendering.
 
 # Intelligent Search API Integration
 

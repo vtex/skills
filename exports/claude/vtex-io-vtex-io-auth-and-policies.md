@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding or implementing permissions and authorization boundaries for vtex io apps. covers manifest policies, outbound-access rules, least-privilege design, and how service routes or integrations map to explicit permissions. use for deciding who is authorized to call or consume a capability, adding new integrations, exposing protected routes, or reviewing app permissions for overreach or missing access.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when deciding or implementing permissions and authorization boundaries for VTEX IO apps. Covers manifest policies, outbound-access rules, least-privilege design, and how service routes or integrations map to explicit permissions. Use for deciding who is authorized to call or consume a capability, adding new integrations, exposing protected routes, or reviewing app permissions for overreach or missing access.
 
 # Authorization & Policy Design
 

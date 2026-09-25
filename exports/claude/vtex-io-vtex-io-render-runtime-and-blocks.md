@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when connecting react components to store framework blocks and render-runtime behavior in vtex io. covers interfaces.json, block registration, block composition, and how storefront components become configurable theme blocks. use for block mapping, theme integration, or reviewing whether a react component is correctly exposed to store framework.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when connecting React components to Store Framework blocks and render-runtime behavior in VTEX IO. Covers interfaces.json, block registration, block composition, and how storefront components become configurable theme blocks. Use for block mapping, theme integration, or reviewing whether a React component is correctly exposed to Store Framework.
 
 # Render Runtime & Block Registration
 

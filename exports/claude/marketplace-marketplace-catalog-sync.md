@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when building catalog or sku synchronization logic for vtex marketplace seller connectors. covers the changenotification endpoint, sku suggestion lifecycle, product data mapping, price and inventory sync, and fulfillment simulation. use for implementing seller-side catalog integration that pushes skus to vtex marketplaces with proper notification handling and rate-limited batch synchronization.
+This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when building catalog or SKU synchronization logic for VTEX marketplace seller connectors. Covers the changenotification endpoint, SKU suggestion lifecycle, product data mapping, price and inventory sync, and fulfillment simulation. Use for implementing seller-side catalog integration that pushes SKUs to VTEX marketplaces with proper notification handling and rate-limited batch synchronization.
 
 # Catalog & SKU Integration
 

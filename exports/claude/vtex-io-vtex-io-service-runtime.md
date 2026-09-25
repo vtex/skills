@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing the runtime structure of a vtex io backend app under node/. covers the service entrypoint, typed context and state, service.json runtime configuration, and how routes, events, and graphql handlers are registered and executed. use for structuring backend apps, defining runtime boundaries, or fixing execution-model issues in vtex io services.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing the runtime structure of a VTEX IO backend app under node/. Covers the Service entrypoint, typed context and state, service.json runtime configuration, and how routes, events, and GraphQL handlers are registered and executed. Use for structuring backend apps, defining runtime boundaries, or fixing execution-model issues in VTEX IO services.
 
 # Service Runtime & Execution Model
 

@@ -17,6 +17,7 @@ Do not use this skill for:
 - PPP endpoint contracts and response shapes — use [`payment-provider-protocol`](payment-payment-provider-protocol.md)
 - `paymentId`/`requestId` idempotency and state machine logic — use [`payment-idempotency`](payment-payment-idempotency.md)
 - PCI compliance and Secure Proxy card handling — use [`payment-pci-security`](payment-payment-pci-security.md)
+- POS / VTEX Sales App terminal payments (`Venda Direta Credito`, `Venda Direta Debito`, Payment Apps) — use [`payment-ppp-pos`](payment-payment-ppp-pos.md)
 
 ## Decision rules
 
@@ -697,6 +698,7 @@ async function notifyGateway(callbackUrl: string, payload: object): Promise<void
 - [`payment-provider-protocol`](payment-payment-provider-protocol.md) — Endpoint contracts and response shapes
 - [`payment-idempotency`](payment-payment-idempotency.md) — `paymentId`/`requestId` idempotency and state machine
 - [`payment-pci-security`](payment-payment-pci-security.md) — PCI compliance and Secure Proxy
+- [`payment-ppp-pos`](payment-payment-ppp-pos.md) — POS / Sales App terminal flow; not Pix/Boleto
 
 ## Reference
 

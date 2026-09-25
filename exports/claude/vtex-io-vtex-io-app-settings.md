@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining, validating, or consuming vtex io app settings. covers settingsschema, app-level configuration boundaries, and how backend or frontend code should depend on settings safely. use for merchant-configurable behavior, settings forms, or reviewing whether settings belong in app configuration rather than hardcoded logic or custom data entities.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when defining, validating, or consuming VTEX IO app settings. Covers settingsSchema, app-level configuration boundaries, and how backend or frontend code should depend on settings safely. Use for merchant-configurable behavior, settings forms, or reviewing whether settings belong in app configuration rather than hardcoded logic or custom data entities.
 
 # App Settings & Configuration Boundaries
 

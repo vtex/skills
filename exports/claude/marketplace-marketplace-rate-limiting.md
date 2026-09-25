@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when implementing retry logic, rate limit handling, or resilience patterns in vtex api integrations. covers vtex rate limit headers (x-ratelimit-remaining, x-ratelimit-reset, retry-after), 429 status handling, exponential backoff with jitter, circuit breaker patterns, and request queuing. use for any vtex marketplace integration that must gracefully handle api throttling and maintain high availability.
+This skill provides guidance for AI agents working with VTEX Marketplace Integration. Apply these constraints and patterns when assisting developers with apply when implementing retry logic, rate limit handling, or resilience patterns in VTEX API integrations. Covers VTEX rate limit headers (X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After), 429 status handling, exponential backoff with jitter, circuit breaker patterns, and request queuing. Use for any VTEX marketplace integration that must gracefully handle API throttling and maintain high availability.
 
 # API Rate Limiting & Resilience
 

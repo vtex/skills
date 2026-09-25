@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when improving vtex io node or .net services for latency, throughput, and resilience: in-process lru, vbase, stale-while-revalidate, appsettings loading, request context, parallel client calls, and avoiding duplicate work. covers application-level performance patterns that complement edge/cdn caching. use when optimizing backends beyond route-level cache-control.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when improving VTEX IO Node or .NET services for latency, throughput, and resilience: in-process LRU, VBase, stale-while-revalidate, AppSettings loading, request context, parallel client calls, and avoiding duplicate work. Covers application-level performance patterns that complement edge/CDN caching. Use when optimizing backends beyond route-level Cache-Control.
 
 # VTEX IO application performance
 

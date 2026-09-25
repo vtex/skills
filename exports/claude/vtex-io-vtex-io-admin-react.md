@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building vtex io admin-facing react interfaces under the admin builder. covers vtex styleguide and shoreline usage, admin page composition, data-heavy admin interactions, and keeping administrative interfaces consistent with the vtex admin environment. use for settings pages, moderation tools, dashboards, or operational uis inside vtex admin.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when building VTEX IO admin-facing React interfaces under the admin builder. Covers VTEX Styleguide and Shoreline usage, admin page composition, data-heavy admin interactions, and keeping administrative interfaces consistent with the VTEX Admin environment. Use for settings pages, moderation tools, dashboards, or operational UIs inside VTEX Admin.
 
 # Admin React Interfaces
 

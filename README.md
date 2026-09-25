@@ -4,7 +4,7 @@
 
 <h1 align="center">VTEX Skills</h1>
 <p align="center">
-  <strong>40 AI agent skills for VTEX platform development — one source, six export formats.</strong>
+  <strong>41 AI agent skills for VTEX platform development — one source, six export formats.</strong>
 </p>
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
@@ -13,7 +13,7 @@
   <a href="#contributing">Contributing</a>
 </p>
 <p align="center">
-  <img src="https://img.shields.io/badge/skills-40-F71963" alt="40 skills">
+  <img src="https://img.shields.io/badge/skills-41-F71963" alt="41 skills">
   <img src="https://img.shields.io/badge/tracks-7-blue" alt="7 tracks">
   <img src="https://img.shields.io/badge/platforms-6-green" alt="6 platforms">
   <img src="https://img.shields.io/github/license/vtex/skills" alt="License">
@@ -171,9 +171,9 @@ Coding rules and workflow for developing VTEX FastStore storefronts. Covers Type
 </details>
 
 <details>
-<summary><strong>Track 3: Payment Connector Development</strong> — 5 skills for PPP integration</summary>
+<summary><strong>Track 3: Payment Connector Development</strong> — 6 skills for PPP integration</summary>
 
-All 9 Payment Provider Protocol endpoints, Payment Provider Framework lifecycle, idempotency patterns, async payment flows, and PCI compliance via the Secure Proxy.
+All 9 Payment Provider Protocol endpoints, Payment Provider Framework lifecycle, idempotency patterns, async payment flows, PCI compliance via the Secure Proxy, and POS / VTEX Sales App card-present payments.
 
 | Skill | Description |
 |---|---|
@@ -182,6 +182,7 @@ All 9 Payment Provider Protocol endpoints, Payment Provider Framework lifecycle,
 | `payment-idempotency` | `paymentId` and `requestId` idempotency, duplicate prevention |
 | `payment-async-flow` | Async approval, callback URLs, and the 7-day retry window |
 | `payment-pci-security` | Secure Proxy, card tokenization, and PCI constraint enforcement |
+| `payment-ppp-pos` | PPP applied to POS on VTEX Sales App: Venda Direta methods, Payment Apps, and terminal callbacks |
 
 </details>
 

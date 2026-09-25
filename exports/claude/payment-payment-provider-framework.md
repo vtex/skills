@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when designing or implementing a payment connector in vtex io. covers ppf implementation, typescript 3.9.7 builder-hub constraints and safe dependency resolutions, configuration.json schema validation, paymentproviderservice clients wiring, secure proxy scope (authorize-only), externalclient vs secureexternalclient patterns, iocontext access, ppf response helpers, psp integration checklist, and vtex link debugging. use for any implementation of a payment connector hosted in vtex io.
+This skill provides guidance for AI agents working with VTEX Payment Connector Development. Apply these constraints and patterns when assisting developers with apply when designing or implementing a Payment Connector in VTEX IO. Covers PPF implementation, TypeScript 3.9.7 builder-hub constraints and safe dependency resolutions, configuration.json schema validation, PaymentProviderService clients wiring, Secure Proxy scope (authorize-only), ExternalClient vs SecureExternalClient patterns, IOContext access, PPF response helpers, PSP integration checklist, and vtex link debugging. Use for any implementation of a Payment Connector hosted in VTEX IO.
 
 # Payment Provider Framework (VTEX IO)
 
@@ -17,6 +17,7 @@ Do not use this skill for:
 - Idempotency and duplicate `paymentId` handling — use [`payment-idempotency`](../payment-idempotency/skill.md)
 - Async `undefined` status, `callbackUrl` notification vs retry (IO vs non-IO) — use [`payment-async-flow`](../payment-async-flow/skill.md)
 - PCI rules, logging, and token semantics beyond IO wiring — use [`payment-pci-security`](../payment-pci-security/skill.md)
+- POS / Sales App card-present overlay (`Venda Direta` methods, Payment Apps, terminal serial) — use [`payment-ppp-pos`](../payment-ppp-pos/skill.md) together with this skill
 
 ## Decision rules
 
@@ -765,6 +766,7 @@ Replace all example vendor names, endpoints, and credentials with values for you
 - [`payment-idempotency`](../payment-idempotency/skill.md) — `paymentId` / `requestId` and retries
 - [`payment-async-flow`](../payment-async-flow/skill.md) — `undefined` status, `callbackUrl` (IO retry vs notification), and redirect-based flows
 - [`payment-pci-security`](../payment-pci-security/skill.md) — PCI and Secure Proxy semantics beyond IO wiring
+- [`payment-ppp-pos`](../payment-ppp-pos/skill.md) — POS / Sales App card-present overlay (`Venda Direta` methods, Payment Apps, terminal callbacks)
 
 ## Reference
 

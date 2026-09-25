@@ -1,4 +1,4 @@
-This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing asynchronous processing in vtex io services through events, workers, and background handlers. covers event handler structure, idempotency, retry-safe processing, and moving expensive work out of request-response routes. use for event-driven integrations, delayed processing, or background jobs in vtex io apps.
+This skill provides guidance for AI agents working with VTEX Custom VTEX IO Apps. Apply these constraints and patterns when assisting developers with apply when designing or implementing asynchronous processing in VTEX IO services through events, workers, and background handlers. Covers event handler structure, idempotency, retry-safe processing, and moving expensive work out of request-response routes. Use for event-driven integrations, delayed processing, or background jobs in VTEX IO apps.
 
 # Events, Workers & Async Processing
 
