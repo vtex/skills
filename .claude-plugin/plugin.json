@@ -1,0 +1,22 @@
+{
+  "name": "vtex-ai-skills",
+  "version": "1.10.0",
+  "description": "AI agent skills for VTEX platform development — Architecture, FastStore, Payment, VTEX IO, Marketplace, and Headless Frontend.",
+  "author": {
+    "name": "VTEX",
+    "url": "https://github.com/vtex"
+  },
+  "homepage": "https://github.com/vtex/skills",
+  "repository": "https://github.com/vtex/skills",
+  "license": "MIT",
+  "keywords": [
+    "architecture",
+    "vtex",
+    "ecommerce",
+    "faststore",
+    "payment",
+    "marketplace",
+    "headless",
+    "vtex-io"
+  ]
+}
