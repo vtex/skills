@@ -47,6 +47,17 @@ gh skill update --all
 
 Skills are installed to `.agents/skills/` at project scope by default — shared automatically across GitHub Copilot, Cursor, Claude Code, Codex, OpenCode, Windsurf, and [40+ other agents](https://cli.github.com/manual/gh_skill_install). Use `--scope user` to install globally instead.
 
+### Claude Code plugin
+
+Install every skill as a Claude Code plugin straight from this repository:
+
+```bash
+/plugin marketplace add vtex/skills
+/plugin install vtex-ai-skills@vtex-skills
+```
+
+Skills load on demand when a task matches their description. Run `/plugin marketplace update vtex-skills` to pull new releases.
+
 ### npx (No GitHub CLI required)
 
 Works on any machine with Node.js. Handles bulk installs and is CI-friendly:
@@ -140,6 +151,7 @@ cp -r exports/opencode/. ~/.config/opencode/skills/
 | **AGENTS.md** | Markdown | ✅ Native in 7+ tools | 1 root file + 1 per track |
 | **Cursor** | `.mdc` rules | ✅ Glob + description | 1 per skill + per-track composites |
 | **GitHub Copilot** | Instructions | ✅ Auto-loaded | 1 master file + 1 per track |
+| **Claude Code** | Plugin (`SKILL.md`) | ✅ Auto-discovered | 1 directory per skill |
 | **Claude Projects** | Knowledge files | Manual upload | 1 per skill + per-track composites |
 | **OpenCode** | `SKILL.md` | ✅ Auto-discovered | 1 directory per skill |
 | **Kiro** | `POWER.md` + steering | ✅ Auto-discovered | 1 `POWER.md` + per-skill steering files |
@@ -255,6 +267,8 @@ rules/*.mdc              # Cursor rules (auto-discovered)
 skills/*/SKILL.md        # Agent skills (auto-discovered)
 .cursor-plugin/plugin.json   # Cursor plugin manifest
 .plugin/plugin.json          # Vendor-neutral plugin manifest
+.claude-plugin/plugin.json   # Claude Code plugin manifest
+.claude-plugin/marketplace.json  # Claude Code marketplace (install via /plugin)
 ```
 
 Compatible tools (Cursor, Claude Code, and others implementing the Open Plugins spec) can install this repo directly as a plugin. The `rules/` and `skills/` directories at the repo root follow the standard layout, and the manifests provide metadata for discovery.

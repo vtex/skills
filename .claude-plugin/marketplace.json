@@ -1,0 +1,24 @@
+{
+  "name": "vtex-skills",
+  "owner": {
+    "name": "VTEX"
+  },
+  "metadata": {
+    "description": "VTEX AI skills for Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "vtex-ai-skills",
+      "source": "./",
+      "description": "AI agent skills for VTEX platform development — Architecture, FastStore, Payment, VTEX IO, Marketplace, and Headless Frontend.",
+      "version": "1.10.0",
+      "author": {
+        "name": "VTEX"
+      },
+      "homepage": "https://github.com/vtex/skills",
+      "repository": "https://github.com/vtex/skills",
+      "license": "MIT",
+      "category": "development"
+    }
+  ]
+}
