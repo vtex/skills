@@ -77,7 +77,7 @@ Releases are automated via [Release Please](https://github.com/googleapis/releas
 
 - Merging to `main` triggers a bot-managed **release PR** that bumps the version based on conventional commits.
 - Merging that release PR creates the tag and GitHub Release automatically.
-- `package.json`, `.plugin/plugin.json`, and `.cursor-plugin/plugin.json` are all bumped together — never edit their `version` fields by hand.
+- `package.json`, `.plugin/plugin.json`, `.cursor-plugin/plugin.json`, and the `.claude-plugin/` manifests are all bumped together — never edit their `version` fields by hand.
 
 **Commit prefix → version bump:**
 

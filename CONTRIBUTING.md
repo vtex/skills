@@ -403,7 +403,7 @@ This repository uses [Release Please](https://github.com/googleapis/release-plea
 2. The release PR title is `chore(release): vX.Y.Z` and contains a generated changelog.
 3. Merge the release PR → Release Please creates the git tag → the release workflow packages tarballs and publishes a GitHub Release.
 
-`package.json`, `.plugin/plugin.json`, and `.cursor-plugin/plugin.json` are bumped together automatically.
+`package.json`, `.plugin/plugin.json`, `.cursor-plugin/plugin.json`, and the `.claude-plugin/` manifests are bumped together automatically.
 
 ### Commit conventions → version bump
 
